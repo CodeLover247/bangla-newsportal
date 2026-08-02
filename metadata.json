@@ -1,0 +1,8 @@
+{
+  "name": "Bangladeshi News Portal CMS",
+  "description": "A comprehensive Bangladeshi News Portal CMS with Bangla \u0026 English bilingual switching, Bangla era date calculation, dark/light mode, custom homepage sections, dynamic navigation menus, photo/video gallery, SEO tools, responsive layout, and complete admin panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

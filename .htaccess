@@ -1,0 +1,16 @@
+# Newspaper Portal CMS .htaccess Configuration
+# Compatible with cPanel, Apache 2.2/2.4, LiteSpeed & Nginx Proxy
+
+DirectoryIndex index.php index.html
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+</IfModule>
+
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+AddDefaultCharset UTF-8
+
+
