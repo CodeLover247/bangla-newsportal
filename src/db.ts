@@ -430,6 +430,93 @@ function runSchemaAndSeeds() {
       'Artisans displaying hand-woven crafts'
     ]);
   }
+
+  // Seed default menus if empty
+  seedDefaultMenus(false);
+}
+
+export function seedDefaultMenus(force = false) {
+  try {
+    const countObj = queryOne('SELECT count(*) as count FROM menus');
+    if (!force && countObj && countObj.count > 0) {
+      return;
+    }
+    if (force) {
+      runQuery('DELETE FROM menus');
+    }
+
+    // 1. Top Bar Menus
+    const topMenus = [
+      { title: 'আমাদের সম্পর্কে', url: '/page.php?slug=about-us', item_order: 1 },
+      { title: 'যোগাযোগ', url: '/contact.php', item_order: 2 },
+      { title: 'গোপনীয়তা নীতি', url: '/page.php?slug=privacy-policy', item_order: 3 },
+      { title: 'ব্যবহারের শর্তাবলী', url: '/page.php?slug=terms', item_order: 4 }
+    ];
+    for (const tm of topMenus) {
+      runQuery(
+        'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+        ['top', tm.title, tm.url, tm.item_order]
+      );
+    }
+
+    // 2. Header Navigation Menus (Home + Categories + Gallery + Video)
+    const cats = queryAll('SELECT * FROM categories WHERE status = 1 ORDER BY cat_order ASC, id ASC');
+    let order = 1;
+
+    runQuery(
+      'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+      ['header', 'প্রচ্ছদ', '/', order++]
+    );
+
+    const catMap: Record<number, number> = {};
+    for (const cat of cats) {
+      if (cat.parent_id === 0) {
+        runQuery(
+          'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+          ['header', cat.name, `/category.php?slug=${cat.slug}`, order++]
+        );
+        const lastIdObj = queryOne('SELECT max(id) as id FROM menus');
+        if (lastIdObj && lastIdObj.id) {
+          catMap[cat.id] = Number(lastIdObj.id);
+        }
+      }
+    }
+
+    for (const cat of cats) {
+      if (cat.parent_id > 0 && catMap[cat.parent_id]) {
+        runQuery(
+          'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, ?, ?, ?, ?, "_self", 1)',
+          ['header', catMap[cat.parent_id], cat.name, `/category.php?slug=${cat.slug}`, 1]
+        );
+      }
+    }
+
+    runQuery(
+      'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+      ['header', 'ছবি গ্যালারি', '/gallery.php', order++]
+    );
+    runQuery(
+      'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+      ['header', 'ভিডিও খবর', '/video.php', order++]
+    );
+
+    // 3. Footer Menus
+    const footerMenus = [
+      { title: 'আমাদের সম্পর্কে', url: '/page.php?slug=about-us', item_order: 1 },
+      { title: 'যোগাযোগ', url: '/contact.php', item_order: 2 },
+      { title: 'গোপনীয়তা নীতি', url: '/page.php?slug=privacy-policy', item_order: 3 },
+      { title: 'ব্যবহারের শর্তাবলী', url: '/page.php?slug=terms', item_order: 4 },
+      { title: 'বিজ্ঞাপন দিন', url: '/page.php?slug=advertising', item_order: 5 }
+    ];
+    for (const fm of footerMenus) {
+      runQuery(
+        'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, 0, ?, ?, ?, "_self", 1)',
+        ['footer', fm.title, fm.url, fm.item_order]
+      );
+    }
+  } catch (e) {
+    console.error('Failed to seed default menus:', e);
+  }
 }
 
 export function runQuery(sql: string, params: any[] = []): { lastInsertRowid: number; changes: number } {
@@ -734,6 +821,70 @@ export function getHomepagePhotos(limit = 8): any[] {
     'SELECT p.*, a.title as album_title, a.slug as album_slug FROM gallery_photos p LEFT JOIN gallery_albums a ON p.album_id = a.id ORDER BY p.id DESC LIMIT ?',
     [limit]
   );
+}
+
+export function formatVideoEmbedUrl(url: string): { embedUrl: string; isHls: boolean; isDirectMp4: boolean; isFacebook: boolean; youtubeId: string | null } {
+  if (!url) return { embedUrl: '', isHls: false, isDirectMp4: false, isFacebook: false, youtubeId: null };
+  const str = url.trim();
+
+  // YouTube matchers
+  const ytReg = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  const ytMatch = str.match(ytReg);
+  if (ytMatch && ytMatch[1]) {
+    const youtubeId = ytMatch[1];
+    return {
+      embedUrl: `https://www.youtube.com/embed/${youtubeId}?autoplay=0&rel=0`,
+      isHls: false,
+      isDirectMp4: false,
+      isFacebook: false,
+      youtubeId
+    };
+  }
+
+  // M3U or M3U8 (HLS stream)
+  if (str.includes('.m3u8') || str.includes('.m3u')) {
+    return {
+      embedUrl: str,
+      isHls: true,
+      isDirectMp4: false,
+      isFacebook: false,
+      youtubeId: null
+    };
+  }
+
+  // Facebook matchers
+  if (str.includes('facebook.com') || str.includes('fb.watch')) {
+    let fbUrl = str;
+    if (!str.includes('facebook.com/plugins/video.php')) {
+      fbUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(str)}&show_text=false`;
+    }
+    return {
+      embedUrl: fbUrl,
+      isHls: false,
+      isDirectMp4: false,
+      isFacebook: true,
+      youtubeId: null
+    };
+  }
+
+  // Direct MP4 / WebM / OGG
+  if (/\.(mp4|webm|ogg)($|\?)/i.test(str)) {
+    return {
+      embedUrl: str,
+      isHls: false,
+      isDirectMp4: true,
+      isFacebook: false,
+      youtubeId: null
+    };
+  }
+
+  return {
+    embedUrl: str,
+    isHls: false,
+    isDirectMp4: false,
+    isFacebook: false,
+    youtubeId: null
+  };
 }
 
 /* Date & Language Helpers */

@@ -17,7 +17,8 @@ import {
   convertEnToBn,
   timeAgo,
   getCategoryDisplayName,
-  getPostDisplayAuthor
+  getPostDisplayAuthor,
+  formatVideoEmbedUrl
 } from './db.js';
 
 export function escapeHtml(str: any): string {
@@ -43,7 +44,8 @@ export function renderPublicHeader(locals: any, title = ''): string {
 
   const categories = locals.categories || getCategories(0, true);
   const breakingNews = locals.breaking_news || getBreakingNews(6);
-  const customMenus = locals.custom_header_menus || getMenus('header');
+  const customTopMenus = locals.custom_top_menus || getMenus('top');
+  const customHeaderMenus = locals.custom_header_menus || getMenus('header');
 
   const langSwitchUrl = (lang === 'bn') ? '?lang=en' : '?lang=bn';
   const langSwitchLabel = (lang === 'bn') ? 'English' : 'বাংলা';
@@ -55,6 +57,48 @@ export function renderPublicHeader(locals: any, title = ''): string {
       <a class="nav-link" href="/category.php?slug=${escapeHtml(cat.slug)}">${dispName}</a>
     </li>`;
   });
+
+  let topNavLinksHtml = '';
+  if (customTopMenus && customTopMenus.length > 0) {
+    customTopMenus.forEach((tm: any) => {
+      topNavLinksHtml += `<a href="${escapeHtml(tm.url)}" target="${escapeHtml(tm.target || '_self')}" class="small text-decoration-none hover-red me-2"><i class="bi bi-link-45deg me-1 text-danger"></i> ${escapeHtml(tm.title)}</a>`;
+    });
+  } else {
+    topNavLinksHtml = `<a href="/page.php?slug=about-us" class="small me-2"><i class="bi bi-info-circle me-1"></i> ${lang === 'bn' ? 'আমাদের সম্পর্কে' : 'About Us'}</a>
+      <a href="/contact.php" class="small me-2"><i class="bi bi-envelope me-1"></i> ${lang === 'bn' ? 'যোগাযোগ' : 'Contact'}</a>`;
+  }
+
+  let mainNavItemsHtml = '';
+  if (customHeaderMenus && customHeaderMenus.length > 0) {
+    customHeaderMenus.forEach((cm: any) => {
+      if (cm.children && cm.children.length > 0) {
+        mainNavItemsHtml += `<li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="${escapeHtml(cm.url)}" role="button" data-bs-toggle="dropdown" aria-expanded="false" target="${escapeHtml(cm.target || '_self')}">
+            ${escapeHtml(cm.title)}
+          </a>
+          <ul class="dropdown-menu border-0 shadow-lg">`;
+        cm.children.forEach((ch: any) => {
+          mainNavItemsHtml += `<li><a class="dropdown-item py-2" href="${escapeHtml(ch.url)}" target="${escapeHtml(ch.target || '_self')}"><i class="bi bi-chevron-right me-1 text-danger small"></i> ${escapeHtml(ch.title)}</a></li>`;
+        });
+        mainNavItemsHtml += `</ul></li>`;
+      } else {
+        mainNavItemsHtml += `<li class="nav-item">
+          <a class="nav-link" href="${escapeHtml(cm.url)}" target="${escapeHtml(cm.target || '_self')}">${escapeHtml(cm.title)}</a>
+        </li>`;
+      }
+    });
+  } else {
+    mainNavItemsHtml = `<li class="nav-item">
+      <a class="nav-link active" href="/"><i class="bi bi-house-door-fill me-1"></i> ${lang === 'bn' ? 'প্রচ্ছদ' : 'Home'}</a>
+    </li>
+    ${categoriesNavHtml}
+    <li class="nav-item">
+      <a class="nav-link text-danger fw-bold" href="/gallery.php"><i class="bi bi-images me-1"></i> ${lang === 'bn' ? 'ছবি গ্যালারি' : 'Photo Gallery'}</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link text-danger fw-bold" href="/video.php"><i class="bi bi-play-btn-fill me-1"></i> ${lang === 'bn' ? 'ভিডিও খবর' : 'Video News'}</a>
+    </li>`;
+  }
 
   let breakingHtml = '';
   breakingNews.forEach((bn: any) => {
@@ -172,13 +216,12 @@ export function renderPublicHeader(locals: any, title = ''): string {
 <body>
     <!-- Top Utility Bar -->
     <div class="top-bar no-print">
-        <div class="container d-flex justify-content-between align-items-center">
+        <div class="container d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div class="small fw-semibold">
                 <i class="bi bi-calendar3 me-1 text-danger"></i> ${escapeHtml(fullDateStr)}
             </div>
             <div class="d-flex align-items-center gap-3">
-                <a href="/page.php?slug=about-us" class="small"><i class="bi bi-info-circle me-1"></i> ${lang === 'bn' ? 'আমাদের সম্পর্কে' : 'About Us'}</a>
-                <a href="/contact.php" class="small"><i class="bi bi-envelope me-1"></i> ${lang === 'bn' ? 'যোগাযোগ' : 'Contact'}</a>
+                ${topNavLinksHtml}
                 ${getSetting('enable_translation', '1') === '1' ? `<a href="${langSwitchUrl}" class="lang-switch-btn"><i class="bi bi-translate"></i> ${langSwitchLabel}</a>` : ''}
                 <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Dark/Light Theme">
                     <i class="bi bi-moon-stars" id="themeIcon"></i>
@@ -212,16 +255,7 @@ export function renderPublicHeader(locals: any, title = ''): string {
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/"><i class="bi bi-house-door-fill me-1"></i> ${lang === 'bn' ? 'প্রচ্ছদ' : 'Home'}</a>
-                    </li>
-                    ${categoriesNavHtml}
-                    <li class="nav-item">
-                        <a class="nav-link text-danger fw-bold" href="/gallery.php"><i class="bi bi-images me-1"></i> ${lang === 'bn' ? 'ছবি গ্যালারি' : 'Photo Gallery'}</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-danger fw-bold" href="/video.php"><i class="bi bi-play-btn-fill me-1"></i> ${lang === 'bn' ? 'ভিডিও খবর' : 'Video News'}</a>
-                    </li>
+                    ${mainNavItemsHtml}
                 </ul>
                 <form class="d-flex" action="/search.php" method="GET">
                     <div class="input-group input-group-sm">
@@ -272,6 +306,21 @@ export function renderPublicFooter(locals: any): string {
     </a>
   </div>`;
 
+  const customFooterMenus = locals.custom_footer_menus || getMenus('footer');
+  let footerLinksHtml = '';
+  if (customFooterMenus && customFooterMenus.length > 0) {
+    customFooterMenus.forEach((fm: any) => {
+      footerLinksHtml += `<div class="col-6"><a href="${escapeHtml(fm.url)}" target="${escapeHtml(fm.target || '_self')}">${escapeHtml(fm.title)}</a></div>`;
+    });
+    footerLinksHtml += `<div class="col-6"><a href="/admin/login.php" target="_blank" class="text-warning"><i class="bi bi-lock-fill me-1"></i> ${lang === 'bn' ? 'এডমিন প্যানেল' : 'Admin Panel'}</a></div>`;
+  } else {
+    footerLinksHtml = `<div class="col-6"><a href="/page.php?slug=about-us">${lang === 'bn' ? 'আমাদের সম্পর্কে' : 'About Us'}</a></div>
+      <div class="col-6"><a href="/contact.php">${lang === 'bn' ? 'যোগাযোগ' : 'Contact Us'}</a></div>
+      <div class="col-6"><a href="/page.php?slug=privacy-policy">${lang === 'bn' ? 'গোপনীয়তা নীতি' : 'Privacy Policy'}</a></div>
+      <div class="col-6"><a href="/page.php?slug=terms">${lang === 'bn' ? 'ব্যবহারের শর্তাবলী' : 'Terms of Service'}</a></div>
+      <div class="col-6"><a href="/admin/login.php" target="_blank" class="text-warning"><i class="bi bi-lock-fill me-1"></i> ${lang === 'bn' ? 'এডমিন প্যানেল' : 'Admin Panel'}</a></div>`;
+  }
+
   let editorialHtml = '';
   if (chiefEditor) {
     editorialHtml += `<p class="mb-1"><i class="bi bi-person-fill text-danger me-2"></i><strong>${lang === 'bn' ? 'প্রধান সম্পাদক' : 'Editor-in-Chief'}:</strong> ${escapeHtml(chiefEditor)}</p>`;
@@ -309,11 +358,7 @@ export function renderPublicFooter(locals: any): string {
                 <div class="col-lg-4 col-md-6">
                     <h5 class="text-white fw-bold mb-3">${lang === 'bn' ? 'গুরুত্বপূর্ণ লিঙ্ক' : 'Important Links'}</h5>
                     <div class="row g-2 small">
-                        <div class="col-6"><a href="/page.php?slug=about-us">${lang === 'bn' ? 'আমাদের সম্পর্কে' : 'About Us'}</a></div>
-                        <div class="col-6"><a href="/contact.php">${lang === 'bn' ? 'যোগাযোগ' : 'Contact Us'}</a></div>
-                        <div class="col-6"><a href="/page.php?slug=privacy-policy">${lang === 'bn' ? 'গোপনীয়তা নীতি' : 'Privacy Policy'}</a></div>
-                        <div class="col-6"><a href="/page.php?slug=terms">${lang === 'bn' ? 'ব্যবহারের শর্তাবলী' : 'Terms of Service'}</a></div>
-                        <div class="col-6"><a href="/admin/login.php" target="_blank" class="text-warning"><i class="bi bi-lock-fill me-1"></i> ${lang === 'bn' ? 'এডমিন প্যানেল' : 'Admin Panel'}</a></div>
+                        ${footerLinksHtml}
                     </div>
                 </div>
                 ${contactHtml ? `
@@ -705,37 +750,202 @@ export function renderHomeView(locals: any): string {
 
   let sectionsHtml = '';
   sections.forEach((sec: any) => {
+    // Check special section types: video_gallery_theater, photo_gallery_grid
+    if (sec.layout_style === 'video_gallery_theater') {
+      const vids = getVideos(sec.post_limit || 4);
+      if (vids.length === 0) return;
+      let vidHtml = '';
+      vids.forEach((v: any) => {
+        const fmt = formatVideoEmbedUrl(v.video_url);
+        const thumb = v.thumbnail || (fmt.youtubeId ? `https://img.youtube.com/vi/${fmt.youtubeId}/hqdefault.jpg` : fallbackImg);
+        vidHtml += `<div class="col-6 col-md-3 mb-3">
+          <div class="news-card border rounded overflow-hidden shadow-sm h-100 bg-black text-white position-relative">
+            <div class="news-card-img-wrapper position-relative" style="height: 140px;">
+              <img src="${escapeHtml(thumb)}" class="w-100 h-100 object-fit-cover opacity-75" alt="">
+              <a href="/video.php?id=${v.id}" class="position-absolute top-50 start-50 translate-middle text-danger fs-1"><i class="bi bi-play-circle-fill"></i></a>
+            </div>
+            <div class="p-2">
+              <h6 class="fs-6 fw-bold lh-sm mb-0 text-truncate"><a href="/video.php?id=${v.id}" class="text-white text-decoration-none hover-red">${escapeHtml(v.title)}</a></h6>
+            </div>
+          </div>
+        </div>`;
+      });
+      sectionsHtml += `<section class="homepage-section mb-4">
+        <div class="section-title d-flex justify-content-between align-items-center mb-3">
+          <span><i class="bi bi-play-btn-fill text-danger me-2"></i>${escapeHtml(getCategoryDisplayName(sec.title, lang))}</span>
+          <a href="/videos.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill">${lang === 'bn' ? 'সব ভিডিও' : 'All Videos'} &rarr;</a>
+        </div>
+        <div class="row g-3">${vidHtml}</div>
+      </section>`;
+      return;
+    }
+
+    if (sec.layout_style === 'photo_gallery_grid') {
+      const albums = getGalleryAlbumsWithPhotos(sec.post_limit || 4);
+      if (albums.length === 0) return;
+      let albHtml = '';
+      albums.forEach((alb: any) => {
+        albHtml += `<div class="col-6 col-md-3 mb-3">
+          <div class="news-card border rounded overflow-hidden shadow-sm h-100 bg-white">
+            <div class="news-card-img-wrapper position-relative" style="height: 140px;">
+              <img src="${escapeHtml(alb.cover_image || fallbackImg)}" class="w-100 h-100 object-fit-cover" alt="">
+              <span class="badge bg-dark position-absolute bottom-0 end-0 m-2"><i class="bi bi-camera me-1"></i>${alb.photo_count || 1}</span>
+            </div>
+            <div class="p-2">
+              <h6 class="fs-6 fw-bold lh-sm mb-0 text-truncate"><a href="/gallery.php?id=${alb.id}" class="text-dark text-decoration-none hover-red">${escapeHtml(alb.title)}</a></h6>
+            </div>
+          </div>
+        </div>`;
+      });
+      sectionsHtml += `<section class="homepage-section mb-4">
+        <div class="section-title d-flex justify-content-between align-items-center mb-3">
+          <span><i class="bi bi-images text-danger me-2"></i>${escapeHtml(getCategoryDisplayName(sec.title, lang))}</span>
+          <a href="/gallery.php" class="btn btn-sm btn-outline-danger fw-bold rounded-pill">${lang === 'bn' ? 'সব ছবি' : 'All Photos'} &rarr;</a>
+        </div>
+        <div class="row g-3">${albHtml}</div>
+      </section>`;
+      return;
+    }
+
     const secPosts = getPosts({ category_id: sec.category_id, limit: sec.post_limit || 5 });
     if (secPosts.length === 0) return;
 
-    let secGridHtml = '';
-    secPosts.forEach((p: any) => {
-      secGridHtml += `<div class="col-md-6 col-lg-4 mb-3">
-        <div class="news-card border rounded overflow-hidden h-100 shadow-sm">
-          <div class="news-card-img-wrapper">
-            <img src="${escapeHtml(p.featured_image || fallbackImg)}" alt="" loading="lazy">
-            <span class="category-badge">${escapeHtml(getCategoryDisplayName(p.category_name || sec.title, lang))}</span>
+    let layoutContent = '';
+
+    if (sec.layout_style === 'lead_side_list') {
+      const pLead = secPosts[0];
+      const pSides = secPosts.slice(1);
+      let sideHtml = '';
+      pSides.forEach((sp: any) => {
+        sideHtml += `<div class="d-flex align-items-center gap-2 mb-2 pb-2 border-bottom">
+          <img src="${escapeHtml(sp.featured_image || fallbackImg)}" class="rounded flex-shrink-0" style="width: 80px; height: 55px; object-fit: cover;" alt="">
+          <div>
+            <h6 class="fs-6 fw-bold lh-sm mb-1"><a href="/article.php?slug=${escapeHtml(sp.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(sp.title)}</a></h6>
+            <small class="text-muted fs-7"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(sp.publish_date, lang))}</small>
           </div>
-          <div class="p-3">
-            <h5 class="news-title fs-6 fw-bold lh-sm mb-2"><a href="/article.php?slug=${escapeHtml(p.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(p.title)}</a></h5>
-            <p class="small text-muted mb-2 line-clamp-2">${escapeHtml(p.short_description || '')}</p>
-            <div class="d-flex justify-content-between align-items-center small text-muted pt-2 border-top">
-              <span><i class="bi bi-person me-1"></i>${escapeHtml(getPostDisplayAuthor(p))}</span>
-              <span><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(p.publish_date, lang))}</span>
+        </div>`;
+      });
+
+      layoutContent = `<div class="row g-3">
+        <div class="col-md-7">
+          <div class="news-card border rounded overflow-hidden shadow-sm h-100">
+            <div class="news-card-img-wrapper" style="height: 220px;">
+              <img src="${escapeHtml(pLead.featured_image || fallbackImg)}" class="w-100 h-100 object-fit-cover" alt="">
+              <span class="category-badge">${escapeHtml(getCategoryDisplayName(pLead.category_name || sec.title, lang))}</span>
+            </div>
+            <div class="p-3">
+              <h5 class="fs-5 fw-bold mb-2"><a href="/article.php?slug=${escapeHtml(pLead.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(pLead.title)}</a></h5>
+              <p class="small text-muted line-clamp-2 mb-2">${escapeHtml(pLead.short_description || '')}</p>
+              <small class="text-muted"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(pLead.publish_date, lang))}</small>
             </div>
           </div>
         </div>
+        <div class="col-md-5">${sideHtml}</div>
       </div>`;
-    });
+
+    } else if (sec.layout_style === 'bento_grid') {
+      const pLead = secPosts[0];
+      const pStacked = secPosts.slice(1, 3);
+      let stackedHtml = '';
+      pStacked.forEach((sp: any) => {
+        stackedHtml += `<div class="news-card border rounded overflow-hidden shadow-sm mb-2 p-2 d-flex gap-2 align-items-center">
+          <img src="${escapeHtml(sp.featured_image || fallbackImg)}" class="rounded flex-shrink-0" style="width: 100px; height: 75px; object-fit: cover;" alt="">
+          <div>
+            <h6 class="fs-6 fw-bold lh-sm mb-1"><a href="/article.php?slug=${escapeHtml(sp.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(sp.title)}</a></h6>
+            <small class="text-muted fs-7"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(sp.publish_date, lang))}</small>
+          </div>
+        </div>`;
+      });
+
+      layoutContent = `<div class="row g-3">
+        <div class="col-md-6">
+          <div class="position-relative rounded overflow-hidden shadow-sm h-100" style="min-height: 240px;">
+            <img src="${escapeHtml(pLead.featured_image || fallbackImg)}" class="w-100 h-100 object-fit-cover position-absolute top-0 start-0" alt="">
+            <div class="hero-overlay p-3 position-absolute bottom-0 start-0 w-100 bg-dark bg-opacity-75 text-white">
+              <span class="badge bg-danger mb-1">${escapeHtml(getCategoryDisplayName(pLead.category_name || sec.title, lang))}</span>
+              <h5 class="lh-sm mb-1"><a href="/article.php?slug=${escapeHtml(pLead.slug)}" class="text-white text-decoration-none">${escapeHtml(pLead.title)}</a></h5>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">${stackedHtml}</div>
+      </div>`;
+
+    } else if (sec.layout_style === 'carousel_slider') {
+      let cardsHtml = '';
+      secPosts.forEach((p: any) => {
+        cardsHtml += `<div class="flex-shrink-0" style="width: 240px;">
+          <div class="news-card border rounded overflow-hidden shadow-sm h-100 bg-white">
+            <img src="${escapeHtml(p.featured_image || fallbackImg)}" class="w-100" style="height: 130px; object-fit: cover;" alt="">
+            <div class="p-2">
+              <h6 class="fs-6 fw-bold lh-sm mb-1"><a href="/article.php?slug=${escapeHtml(p.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(p.title)}</a></h6>
+              <small class="text-muted fs-7"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(p.publish_date, lang))}</small>
+            </div>
+          </div>
+        </div>`;
+      });
+
+      layoutContent = `<div class="d-flex gap-3 overflow-x-auto pb-2" style="scrollbar-width: thin;">${cardsHtml}</div>`;
+
+    } else if (sec.layout_style === 'compact_list') {
+      let rowsHtml = '';
+      secPosts.forEach((p: any) => {
+        rowsHtml += `<div class="col-12 mb-2">
+          <div class="d-flex align-items-center gap-3 p-2 border rounded bg-white shadow-sm hover-shadow">
+            <img src="${escapeHtml(p.featured_image || fallbackImg)}" class="rounded flex-shrink-0" style="width: 85px; height: 60px; object-fit: cover;" alt="">
+            <div class="flex-grow-1">
+              <h6 class="fs-6 fw-bold mb-1"><a href="/article.php?slug=${escapeHtml(p.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(p.title)}</a></h6>
+              <div class="d-flex gap-3 text-muted fs-7">
+                <span><i class="bi bi-tag me-1"></i>${escapeHtml(getCategoryDisplayName(p.category_name || sec.title, lang))}</span>
+                <span><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(p.publish_date, lang))}</span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      });
+      layoutContent = `<div class="row g-2">${rowsHtml}</div>`;
+
+    } else if (sec.layout_style === 'horizontal_cards') {
+      let cardsHtml = '';
+      secPosts.forEach((p: any) => {
+        cardsHtml += `<div class="col-6 col-md-3 mb-3">
+          <div class="news-card border rounded overflow-hidden h-100 shadow-sm bg-white">
+            <img src="${escapeHtml(p.featured_image || fallbackImg)}" class="w-100" style="height: 120px; object-fit: cover;" alt="">
+            <div class="p-2">
+              <h6 class="fs-6 fw-bold lh-sm mb-1"><a href="/article.php?slug=${escapeHtml(p.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(p.title)}</a></h6>
+              <small class="text-muted fs-7"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(p.publish_date, lang))}</small>
+            </div>
+          </div>
+        </div>`;
+      });
+      layoutContent = `<div class="row g-2">${cardsHtml}</div>`;
+
+    } else {
+      // Default: two_column_grid or generic grid
+      let gridHtml = '';
+      secPosts.forEach((p: any) => {
+        gridHtml += `<div class="col-md-6 mb-3">
+          <div class="news-card border rounded overflow-hidden h-100 shadow-sm bg-white">
+            <div class="news-card-img-wrapper" style="height: 160px;">
+              <img src="${escapeHtml(p.featured_image || fallbackImg)}" class="w-100 h-100 object-fit-cover" alt="">
+              <span class="category-badge">${escapeHtml(getCategoryDisplayName(p.category_name || sec.title, lang))}</span>
+            </div>
+            <div class="p-3">
+              <h5 class="news-title fs-6 fw-bold lh-sm mb-2"><a href="/article.php?slug=${escapeHtml(p.slug)}" class="text-dark text-decoration-none hover-red">${escapeHtml(p.title)}</a></h5>
+              <p class="small text-muted mb-2 line-clamp-2">${escapeHtml(p.short_description || '')}</p>
+              <small class="text-muted"><i class="bi bi-clock me-1"></i>${escapeHtml(timeAgo(p.publish_date, lang))}</small>
+            </div>
+          </div>
+        </div>`;
+      });
+      layoutContent = `<div class="row g-3">${gridHtml}</div>`;
+    }
 
     sectionsHtml += `<section class="homepage-section mb-4">
       <div class="section-title d-flex justify-content-between align-items-center mb-3">
         <span>${escapeHtml(getCategoryDisplayName(sec.title, lang))}</span>
         ${sec.category_slug ? `<a href="/category.php?slug=${escapeHtml(sec.category_slug)}" class="btn btn-sm btn-outline-danger fw-bold rounded-pill">${lang === 'bn' ? 'সব খবর' : 'View All'} &rarr;</a>` : ''}
       </div>
-      <div class="row g-3">
-        ${secGridHtml}
-      </div>
+      ${layoutContent}
     </section>`;
   });
 
@@ -1537,64 +1747,166 @@ export function renderAdminCategoriesView(data: any): string {
 export function renderAdminHomepageView(data: any): string {
   const sections = data.sections || [];
   const categories = data.categories || [];
+  const editSec = data.editSection || null;
+  const msg = data.msg || '';
+
+  let alertHtml = '';
+  if (msg === 'added') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Homepage section added successfully!</div>`;
+  if (msg === 'updated') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Homepage section updated successfully!</div>`;
+  if (msg === 'deleted') alertHtml = `<div class="alert alert-danger alert-dismissible fade show">Section removed from homepage!</div>`;
+  if (msg === 'preset_applied') alertHtml = `<div class="alert alert-info alert-dismissible fade show"><i class="bi bi-magic me-1"></i> Prebuilt layout preset applied successfully!</div>`;
+  if (msg === 'status_updated') alertHtml = `<div class="alert alert-secondary alert-dismissible fade show">Section status updated!</div>`;
 
   let secRowsHtml = '';
-  sections.forEach((s: any) => {
-    secRowsHtml += `<tr>
-      <td>${s.id}</td>
-      <td class="fw-bold">${escapeHtml(s.title)}</td>
+  sections.forEach((s: any, idx: number) => {
+    const isFirst = idx === 0;
+    const isLast = idx === sections.length - 1;
+
+    let styleBadge = '<span class="badge bg-secondary">Default</span>';
+    if (s.layout_style === 'lead_side_list') styleBadge = '<span class="badge bg-primary">Lead + Side List</span>';
+    else if (s.layout_style === 'two_column_grid') styleBadge = '<span class="badge bg-info text-dark">2 Column Grid</span>';
+    else if (s.layout_style === 'bento_grid') styleBadge = '<span class="badge bg-success">Bento Box</span>';
+    else if (s.layout_style === 'horizontal_cards') styleBadge = '<span class="badge bg-warning text-dark">Horizontal Cards</span>';
+    else if (s.layout_style === 'carousel_slider') styleBadge = '<span class="badge bg-danger">Carousel Slider</span>';
+    else if (s.layout_style === 'compact_list') styleBadge = '<span class="badge bg-dark">Compact List</span>';
+    else if (s.layout_style === 'video_gallery_theater') styleBadge = '<span class="badge bg-danger"><i class="bi bi-play-circle me-1"></i>Video Theater</span>';
+    else if (s.layout_style === 'photo_gallery_grid') styleBadge = '<span class="badge bg-purple text-white" style="background:#6f42c1;"><i class="bi bi-camera me-1"></i>Photo Grid</span>';
+
+    secRowsHtml += `<tr class="${s.status === 0 ? 'table-light opacity-50' : ''}">
+      <td class="text-center fw-bold text-muted">${s.section_order || (idx + 1)}</td>
+      <td class="fw-bold">
+        ${escapeHtml(s.title)}
+        ${s.status === 0 ? '<span class="badge bg-secondary ms-1">Hidden</span>' : ''}
+      </td>
       <td>${escapeHtml(s.category_name || 'All Categories')}</td>
-      <td>${s.post_limit || 5}</td>
-      <td><a href="/admin/homepage.php?action=delete&id=${s.id}" class="btn btn-sm btn-danger" onclick="return confirm('Remove section?');"><i class="bi bi-trash"></i></a></td>
+      <td>${styleBadge}</td>
+      <td class="text-center">${s.post_limit || 5}</td>
+      <td class="text-end">
+        <div class="btn-group btn-group-sm">
+          ${!isFirst ? `<a href="/admin/homepage.php?action=move_up&id=${s.id}" class="btn btn-outline-secondary" title="Move Up"><i class="bi bi-arrow-up"></i></a>` : ''}
+          ${!isLast ? `<a href="/admin/homepage.php?action=move_down&id=${s.id}" class="btn btn-outline-secondary" title="Move Down"><i class="bi bi-arrow-down"></i></a>` : ''}
+          <a href="/admin/homepage.php?action=toggle_status&id=${s.id}" class="btn btn-outline-${s.status === 1 ? 'warning' : 'success'}" title="${s.status === 1 ? 'Hide Section' : 'Show Section'}">
+            <i class="bi bi-${s.status === 1 ? 'eye-slash' : 'eye'}"></i>
+          </a>
+          <a href="/admin/homepage.php?action=edit&id=${s.id}" class="btn btn-outline-primary" title="Edit Section"><i class="bi bi-pencil"></i></a>
+          <a href="/admin/homepage.php?action=delete&id=${s.id}" class="btn btn-outline-danger" onclick="return confirm('Remove this homepage section?');" title="Delete Section"><i class="bi bi-trash"></i></a>
+        </div>
+      </td>
     </tr>`;
   });
 
   let catOpts = '';
   categories.forEach((c: any) => {
-    catOpts += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+    const sel = editSec && editSec.category_id === c.id ? 'selected' : '';
+    catOpts += `<option value="${c.id}" ${sel}>${escapeHtml(c.name)}</option>`;
   });
 
-  return `${renderAdminHeader('Homepage Layout Manager', 'homepage', data.adminName)}
+  return `${renderAdminHeader('Homepage Layout & Drag-Drop Builder', 'homepage', data.adminName)}
+    ${alertHtml}
+
+    <!-- Layout Presets Quick Bar -->
+    <div class="card border-0 shadow-sm p-3 mb-4 bg-white rounded-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <h6 class="fw-bold m-0"><i class="bi bi-magic text-danger me-2"></i> Quick Apply Prebuilt Layout Templates:</h6>
+        <span class="small text-muted">1-click layout setup with custom block styles</span>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="/admin/homepage.php?action=apply_preset&preset=classic_newspaper" class="btn btn-sm btn-outline-dark fw-bold"><i class="bi bi-journal-text me-1"></i> Classic Newspaper</a>
+        <a href="/admin/homepage.php?action=apply_preset&preset=modern_portal" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-grid-3x3-gap me-1"></i> Modern News Portal</a>
+        <a href="/admin/homepage.php?action=apply_preset&preset=magazine_spotlight" class="btn btn-sm btn-outline-primary fw-bold"><i class="bi bi-sliders me-1"></i> Magazine Spotlight</a>
+        <a href="/admin/homepage.php?action=apply_preset&preset=compact_fast_news" class="btn btn-sm btn-outline-success fw-bold"><i class="bi bi-lightning-charge me-1"></i> Compact Fast News</a>
+      </div>
+    </div>
+
     <div class="row g-4">
+      <!-- Section Form -->
       <div class="col-md-4">
-        <div class="card border p-3 shadow-sm bg-white">
-          <h5 class="fw-bold mb-3">Add Homepage Block</h5>
+        <div class="card border p-3 shadow-sm bg-white rounded-3">
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-${editSec ? 'pencil-square text-primary' : 'plus-circle text-danger'} me-1"></i>
+            ${editSec ? 'Edit Homepage Block' : 'Add New Homepage Block'}
+          </h5>
           <form action="/admin/homepage.php" method="POST">
+            <input type="hidden" name="action" value="${editSec ? 'edit_section' : 'add_section'}">
+            ${editSec ? `<input type="hidden" name="section_id" value="${editSec.id}">` : ''}
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Block Heading</label>
-              <input type="text" name="title" class="form-control" required placeholder="e.g. National News">
+              <label class="form-label fw-bold small">Block Heading *</label>
+              <input type="text" name="title" class="form-control" required value="${escapeHtml(editSec ? editSec.title : '')}" placeholder="e.g. জাতীয় সংবাদ / বরিশাল বিভাগ">
             </div>
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Source Category</label>
+              <label class="form-label fw-bold small">Source News Category</label>
               <select name="category_id" class="form-select">
-                <option value="0">All Categories</option>
+                <option value="0" ${editSec && editSec.category_id === 0 ? 'selected' : ''}>All Categories / Latest News</option>
                 ${catOpts}
               </select>
             </div>
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Articles Limit</label>
-              <input type="number" name="post_limit" class="form-control" value="5" min="1" max="12">
+              <label class="form-label fw-bold small">Layout Style / Template *</label>
+              <select name="layout_style" class="form-select">
+                <option value="lead_side_list" ${editSec && editSec.layout_style === 'lead_side_list' ? 'selected' : ''}>Lead Article + Side List</option>
+                <option value="two_column_grid" ${editSec && editSec.layout_style === 'two_column_grid' ? 'selected' : ''}>2 Column News Grid</option>
+                <option value="bento_grid" ${editSec && editSec.layout_style === 'bento_grid' ? 'selected' : ''}>Bento Spotlight Grid</option>
+                <option value="horizontal_cards" ${editSec && editSec.layout_style === 'horizontal_cards' ? 'selected' : ''}>Horizontal Cards (4 Columns)</option>
+                <option value="carousel_slider" ${editSec && editSec.layout_style === 'carousel_slider' ? 'selected' : ''}>Horizontal Carousel Slider</option>
+                <option value="compact_list" ${editSec && editSec.layout_style === 'compact_list' ? 'selected' : ''}>Compact News List</option>
+                <option value="video_gallery_theater" ${editSec && editSec.layout_style === 'video_gallery_theater' ? 'selected' : ''}>Video Theater Section</option>
+                <option value="photo_gallery_grid" ${editSec && editSec.layout_style === 'photo_gallery_grid' ? 'selected' : ''}>Photo Gallery Albums</option>
+              </select>
             </div>
-            <button type="submit" class="btn btn-danger w-100 fw-bold"><i class="bi bi-plus-lg me-1"></i> Add Block</button>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-bold small">Articles Limit</label>
+                <input type="number" name="post_limit" class="form-control" value="${editSec ? editSec.post_limit : '5'}" min="1" max="12">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Display Order</label>
+                <input type="number" name="section_order" class="form-control" value="${editSec ? editSec.section_order : '1'}" min="1">
+              </div>
+            </div>
+
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="status" value="1" id="statusCheck" ${!editSec || editSec.status === 1 ? 'checked' : ''}>
+              <label class="form-check-label fw-bold small" for="statusCheck">Section Active & Visible</label>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-${editSec ? 'primary' : 'danger'} w-100 fw-bold">
+                <i class="bi bi-${editSec ? 'check-circle' : 'plus-lg'} me-1"></i> ${editSec ? 'Save Changes' : 'Add Block'}
+              </button>
+              ${editSec ? `<a href="/admin/homepage.php" class="btn btn-outline-secondary">Cancel</a>` : ''}
+            </div>
           </form>
         </div>
       </div>
+
+      <!-- Sections Table -->
       <div class="col-md-8">
-        <div class="card-table">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Limit</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${secRowsHtml}
-            </tbody>
-          </table>
+        <div class="card border-0 shadow-sm bg-white rounded-3 overflow-hidden">
+          <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold m-0"><i class="bi bi-layers text-danger me-2"></i> Active Homepage Sections (${sections.length})</h6>
+            <small class="text-muted"><i class="bi bi-arrow-down-up me-1"></i> Use Up/Down buttons to reorder</small>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="text-center" style="width: 60px;">Order</th>
+                  <th>Block Title</th>
+                  <th>Source Category</th>
+                  <th>Layout Style</th>
+                  <th class="text-center">Limit</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${secRowsHtml || '<tr><td colspan="6" class="text-center py-4 text-muted">No homepage blocks added yet. Use the form on the left or apply a prebuilt template.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1700,165 +2012,345 @@ export function renderAdminMediaView(data: any): string {
 export function renderAdminGalleryView(data: any): string {
   const albums = data.albums || [];
   const search = data.search || '';
+  const viewMode = data.view_mode || 'grid';
   const page = data.page || 1;
   const totalPages = data.total_pages || 1;
-  let rowsHtml = '';
+  const editAlb = data.editAlbum || null;
+  const msg = data.msg || '';
 
-  albums.forEach((a: any) => {
-    rowsHtml += `<tr>
-      <td>${a.id}</td>
-      <td class="fw-bold">
-        <img src="${escapeHtml(a.cover_image || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=100&auto=format&fit=crop&q=80')}" class="rounded me-2" style="width: 45px; height: 32px; object-fit: cover;" alt="">
-        ${escapeHtml(a.title)}
-      </td>
-      <td>${a.photos ? a.photos.length : 0} photos</td>
-      <td><a href="/admin/gallery.php?action=delete_album&id=${a.id}" class="btn btn-sm btn-danger" onclick="return confirm('Delete album?');"><i class="bi bi-trash"></i> Delete</a></td>
-    </tr>`;
-  });
+  let alertHtml = '';
+  if (msg === 'created') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Photo album created successfully!</div>`;
+  if (msg === 'updated') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Album details updated!</div>`;
+  if (msg === 'deleted') alertHtml = `<div class="alert alert-danger alert-dismissible fade show">Album deleted!</div>`;
+  if (msg === 'bulk_deleted') alertHtml = `<div class="alert alert-danger alert-dismissible fade show">Selected albums deleted in bulk!</div>`;
+
+  let itemsHtml = '';
+  if (viewMode === 'grid') {
+    let cardsHtml = '';
+    albums.forEach((a: any) => {
+      cardsHtml += `<div class="col-md-4 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm rounded-3 overflow-hidden">
+          <div class="position-relative" style="height: 150px;">
+            <img src="${escapeHtml(a.cover_image || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80')}" class="w-100 h-100 object-fit-cover" alt="">
+            <input type="checkbox" name="album_ids" value="${a.id}" class="form-check-input bulk-checkbox position-absolute top-0 start-0 m-2" style="transform: scale(1.3);">
+            <span class="badge bg-dark position-absolute bottom-0 end-0 m-2"><i class="bi bi-camera me-1"></i>${a.photo_count || 0} photos</span>
+          </div>
+          <div class="p-3">
+            <h6 class="fw-bold text-dark text-truncate mb-1">${escapeHtml(a.title)}</h6>
+            <p class="small text-muted line-clamp-2 mb-2">${escapeHtml(a.description || 'No description.')}</p>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+              <a href="/admin/gallery.php?action=edit&id=${a.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit</a>
+              <a href="/admin/gallery.php?action=delete_album&id=${a.id}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this album?');"><i class="bi bi-trash me-1"></i> Delete</a>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    });
+    itemsHtml = `<div class="row g-3">${cardsHtml || '<div class="col-12 text-center py-5 text-muted">No photo albums found.</div>'}</div>`;
+  } else {
+    let rowsHtml = '';
+    albums.forEach((a: any) => {
+      rowsHtml += `<tr>
+        <td class="text-center"><input type="checkbox" name="album_ids" value="${a.id}" class="form-check-input bulk-checkbox"></td>
+        <td>${a.id}</td>
+        <td class="fw-bold">
+          <img src="${escapeHtml(a.cover_image || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=100&auto=format&fit=crop&q=80')}" class="rounded me-2" style="width: 50px; height: 35px; object-fit: cover;" alt="">
+          ${escapeHtml(a.title)}
+        </td>
+        <td><span class="badge bg-secondary">${a.photo_count || 0} photos</span></td>
+        <td class="text-end">
+          <div class="btn-group btn-group-sm">
+            <a href="/admin/gallery.php?action=edit&id=${a.id}" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+            <a href="/admin/gallery.php?action=delete_album&id=${a.id}" class="btn btn-outline-danger" onclick="return confirm('Delete album?');"><i class="bi bi-trash"></i> Delete</a>
+          </div>
+        </td>
+      </tr>`;
+    });
+    itemsHtml = `<div class="table-responsive bg-white rounded-3 border">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width: 40px;"><input type="checkbox" id="selectAllCheck" onclick="toggleSelectAll(this)"></th>
+            <th>ID</th>
+            <th>Album Title</th>
+            <th>Photo Count</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || '<tr><td colspan="5" class="text-center py-4 text-muted">No albums found.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+  }
 
   return `${renderAdminHeader('Photo Gallery Management', 'gallery', data.adminName)}
+    ${alertHtml}
+
     <div class="row g-4">
+      <!-- Create / Edit Form -->
       <div class="col-md-4">
-        <div class="card border p-3 bg-white shadow-sm">
-          <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle text-danger me-1"></i> Create Photo Album</h5>
+        <div class="card border p-3 bg-white shadow-sm rounded-3">
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-${editAlb ? 'pencil-square text-primary' : 'plus-circle text-danger'} me-1"></i>
+            ${editAlb ? 'Edit Photo Album' : 'Create Photo Album'}
+          </h5>
           <form action="/admin/gallery.php" method="POST">
+            <input type="hidden" name="action" value="${editAlb ? 'edit' : 'add'}">
+            ${editAlb ? `<input type="hidden" name="album_id" value="${editAlb.id}">` : ''}
+
             <div class="mb-3">
               <label class="form-label fw-bold small">Album Title *</label>
-              <input type="text" name="title" class="form-control" required placeholder="e.g. Political Rally Coverage">
+              <input type="text" name="title" class="form-control" required value="${escapeHtml(editAlb ? editAlb.title : '')}" placeholder="e.g. বরিশালে উন্নয়নমূলক কার্যক্রমের ছবি">
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold small">Cover Image URL</label>
-              <input type="text" name="cover_image" class="form-control" value="https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80">
+              <input type="text" name="cover_image" class="form-control" value="${escapeHtml(editAlb ? editAlb.cover_image : 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80')}">
             </div>
             <div class="mb-3">
               <label class="form-label fw-bold small">Description</label>
-              <textarea name="description" class="form-control" rows="2" placeholder="Brief album summary..."></textarea>
+              <textarea name="description" class="form-control" rows="3" placeholder="Brief album summary...">${escapeHtml(editAlb ? editAlb.description || '' : '')}</textarea>
             </div>
-            <button type="submit" class="btn btn-danger w-100 fw-bold"><i class="bi bi-camera me-1"></i> Create Album</button>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-${editAlb ? 'primary' : 'danger'} w-100 fw-bold">
+                <i class="bi bi-${editAlb ? 'check-circle' : 'camera'} me-1"></i> ${editAlb ? 'Update Album' : 'Create Album'}
+              </button>
+              ${editAlb ? `<a href="/admin/gallery.php" class="btn btn-outline-secondary">Cancel</a>` : ''}
+            </div>
           </form>
         </div>
       </div>
+
+      <!-- Albums List / Grid Area -->
       <div class="col-md-8">
-        <!-- Search Filter -->
-        <div class="card border-0 shadow-sm p-3 mb-3 bg-white">
-          <form method="GET" action="/admin/gallery.php">
-            <div class="input-group input-group-sm">
-              <input type="text" name="search" class="form-control" placeholder="Search album by title..." value="${escapeHtml(search)}">
-              <button class="btn btn-danger" type="submit"><i class="bi bi-search"></i> Search</button>
-              ${search ? `<a href="/admin/gallery.php" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>` : ''}
+        <form id="bulkForm" action="/admin/gallery.php" method="POST">
+          <input type="hidden" name="action" value="bulk_delete">
+
+          <!-- Filter & Bulk Bar -->
+          <div class="card border-0 shadow-sm p-3 mb-3 bg-white rounded-3">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-6">
+                <div class="input-group input-group-sm">
+                  <input type="text" name="search" form="searchForm" class="form-control" placeholder="Search albums..." value="${escapeHtml(search)}">
+                  <button class="btn btn-danger" form="searchForm" type="submit"><i class="bi bi-search"></i></button>
+                  ${search ? `<a href="/admin/gallery.php" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>` : ''}
+                </div>
+              </div>
+              <div class="col-md-6 d-flex justify-content-end gap-2">
+                <button type="submit" onclick="return confirm('Delete selected albums in bulk?');" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-trash me-1"></i> Bulk Delete</button>
+                <div class="btn-group btn-group-sm">
+                  <a href="/admin/gallery.php?view_mode=grid&search=${encodeURIComponent(search)}" class="btn btn-${viewMode === 'grid' ? 'danger' : 'outline-secondary'}"><i class="bi bi-grid-fill"></i> Grid</a>
+                  <a href="/admin/gallery.php?view_mode=list&search=${encodeURIComponent(search)}" class="btn btn-${viewMode === 'list' ? 'danger' : 'outline-secondary'}"><i class="bi bi-list-task"></i> List</a>
+                </div>
+              </div>
             </div>
-          </form>
-        </div>
+          </div>
 
-        <div class="card-table">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>ID</th>
-                <th>Album Title</th>
-                <th>Photo Count</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="4" class="text-center py-4 text-muted">No albums created yet.</td></tr>'}
-            </tbody>
-          </table>
-        </div>
+          ${itemsHtml}
+        </form>
 
-        ${totalPages > 1 ? `<div class="d-flex justify-content-between align-items-center mt-3">
+        <form id="searchForm" method="GET" action="/admin/gallery.php">
+          <input type="hidden" name="view_mode" value="${escapeHtml(viewMode)}">
+        </form>
+
+        ${totalPages > 1 ? `<div class="d-flex justify-content-between align-items-center mt-3 pt-2">
           <span class="small text-muted">Page ${page} of ${totalPages}</span>
           <ul class="pagination pagination-sm mb-0">
-            <li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="/admin/gallery.php?search=${encodeURIComponent(search)}&page=${page - 1}">Previous</a></li>
+            <li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="/admin/gallery.php?search=${encodeURIComponent(search)}&view_mode=${encodeURIComponent(viewMode)}&page=${page - 1}">Previous</a></li>
             <li class="page-item active"><span class="page-link bg-danger border-danger">${page}</span></li>
-            <li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="/admin/gallery.php?search=${encodeURIComponent(search)}&page=${page + 1}">Next</a></li>
+            <li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="/admin/gallery.php?search=${encodeURIComponent(search)}&view_mode=${encodeURIComponent(viewMode)}&page=${page + 1}">Next</a></li>
           </ul>
         </div>` : ''}
       </div>
     </div>
+
+    <script>
+      function toggleSelectAll(master) {
+        document.querySelectorAll('.bulk-checkbox').forEach(cb => cb.checked = master.checked);
+      }
+    </script>
     ${renderAdminFooter()}`;
 }
 
 export function renderAdminVideosView(data: any): string {
   const videos = data.videos || [];
   const search = data.search || '';
+  const viewMode = data.view_mode || 'grid';
   const page = data.page || 1;
   const totalPages = data.total_pages || 1;
-  let rowsHtml = '';
+  const editVid = data.editVideo || null;
+  const msg = data.msg || '';
 
-  videos.forEach((v: any) => {
-    rowsHtml += `<tr>
-      <td>${v.id}</td>
-      <td class="fw-bold">${escapeHtml(v.title)}</td>
-      <td><a href="${escapeHtml(v.video_url)}" target="_blank" class="btn btn-xs btn-outline-primary py-0 small"><i class="bi bi-play-circle me-1"></i> Watch Video</a></td>
-      <td><a href="/admin/videos.php?action=delete&id=${v.id}" class="btn btn-sm btn-danger" onclick="return confirm('Delete video?');"><i class="bi bi-trash"></i> Delete</a></td>
-    </tr>`;
-  });
+  let alertHtml = '';
+  if (msg === 'published') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Video headline published!</div>`;
+  if (msg === 'updated') alertHtml = `<div class="alert alert-success alert-dismissible fade show">Video details updated!</div>`;
+  if (msg === 'deleted') alertHtml = `<div class="alert alert-danger alert-dismissible fade show">Video headline removed!</div>`;
+  if (msg === 'bulk_deleted') alertHtml = `<div class="alert alert-danger alert-dismissible fade show">Selected videos deleted in bulk!</div>`;
+
+  let itemsHtml = '';
+  if (viewMode === 'grid') {
+    let cardsHtml = '';
+    videos.forEach((v: any) => {
+      let typeBadge = '<span class="badge bg-danger position-absolute top-0 end-0 m-2"><i class="bi bi-youtube me-1"></i>YouTube</span>';
+      if (v.is_hls) typeBadge = '<span class="badge bg-primary position-absolute top-0 end-0 m-2"><i class="bi bi-broadcast me-1"></i>M3U/HLS</span>';
+      else if (v.is_facebook) typeBadge = '<span class="badge bg-info position-absolute top-0 end-0 m-2"><i class="bi bi-facebook me-1"></i>Facebook</span>';
+      else if (v.is_direct_mp4) typeBadge = '<span class="badge bg-success position-absolute top-0 end-0 m-2"><i class="bi bi-file-play me-1"></i>MP4</span>';
+
+      cardsHtml += `<div class="col-md-4 col-sm-6 mb-3">
+        <div class="card h-100 border-0 shadow-sm rounded-3 overflow-hidden bg-white">
+          <div class="position-relative bg-black" style="height: 150px;">
+            <img src="${escapeHtml(v.thumbnail || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80')}" class="w-100 h-100 object-fit-cover opacity-75" alt="">
+            <input type="checkbox" name="video_ids" value="${v.id}" class="form-check-input bulk-checkbox position-absolute top-0 start-0 m-2" style="transform: scale(1.3);">
+            ${typeBadge}
+            <a href="${escapeHtml(v.embed_url || v.video_url)}" target="_blank" class="position-absolute top-50 start-50 translate-middle text-white fs-1"><i class="bi bi-play-circle-fill"></i></a>
+          </div>
+          <div class="p-3">
+            <h6 class="fw-bold text-dark text-truncate mb-1">${escapeHtml(v.title)}</h6>
+            <p class="small text-muted line-clamp-2 mb-2">${escapeHtml(v.description || v.video_url)}</p>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+              <a href="/admin/videos.php?action=edit&id=${v.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i> Edit</a>
+              <a href="/admin/videos.php?action=delete&id=${v.id}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this video headline?');"><i class="bi bi-trash me-1"></i> Delete</a>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    });
+    itemsHtml = `<div class="row g-3">${cardsHtml || '<div class="col-12 text-center py-5 text-muted">No video headlines found.</div>'}</div>`;
+  } else {
+    let rowsHtml = '';
+    videos.forEach((v: any) => {
+      rowsHtml += `<tr>
+        <td class="text-center"><input type="checkbox" name="video_ids" value="${v.id}" class="form-check-input bulk-checkbox"></td>
+        <td>${v.id}</td>
+        <td class="fw-bold">
+          <img src="${escapeHtml(v.thumbnail || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=80')}" class="rounded me-2" style="width: 50px; height: 35px; object-fit: cover;" alt="">
+          ${escapeHtml(v.title)}
+        </td>
+        <td>
+          <a href="${escapeHtml(v.video_url)}" target="_blank" class="btn btn-xs btn-outline-secondary py-0 small text-truncate" style="max-width: 200px;">
+            <i class="bi bi-link-45deg me-1"></i> ${escapeHtml(v.video_url)}
+          </a>
+        </td>
+        <td class="text-end">
+          <div class="btn-group btn-group-sm">
+            <a href="/admin/videos.php?action=edit&id=${v.id}" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+            <a href="/admin/videos.php?action=delete&id=${v.id}" class="btn btn-outline-danger" onclick="return confirm('Delete video?');"><i class="bi bi-trash"></i> Delete</a>
+          </div>
+        </td>
+      </tr>`;
+    });
+    itemsHtml = `<div class="table-responsive bg-white rounded-3 border">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width: 40px;"><input type="checkbox" id="selectAllCheck" onclick="toggleSelectAll(this)"></th>
+            <th>ID</th>
+            <th>Video Headline</th>
+            <th>Media Link</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || '<tr><td colspan="5" class="text-center py-4 text-muted">No video headlines found.</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+  }
 
   return `${renderAdminHeader('Video News Manager', 'videos', data.adminName)}
+    ${alertHtml}
+
     <div class="row g-4">
+      <!-- Create / Edit Form -->
       <div class="col-md-4">
-        <div class="card border p-3 bg-white shadow-sm">
-          <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle text-danger me-1"></i> Add Video News Headline</h5>
+        <div class="card border p-3 bg-white shadow-sm rounded-3">
+          <h5 class="fw-bold mb-3">
+            <i class="bi bi-${editVid ? 'pencil-square text-primary' : 'plus-circle text-danger'} me-1"></i>
+            ${editVid ? 'Edit Video Headline' : 'Add Video Headline'}
+          </h5>
           <form action="/admin/videos.php" method="POST">
+            <input type="hidden" name="action" value="${editVid ? 'edit' : 'add'}">
+            ${editVid ? `<input type="hidden" name="video_id" value="${editVid.id}">` : ''}
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Video Title *</label>
-              <input type="text" name="title" class="form-control" required placeholder="Headline title...">
+              <label class="form-label fw-bold small">Video Title / Headline *</label>
+              <input type="text" name="title" class="form-control" required value="${escapeHtml(editVid ? editVid.title : '')}" placeholder="Headline title...">
             </div>
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">YouTube / Embed Video URL *</label>
-              <input type="text" name="video_url" class="form-control" required placeholder="https://www.youtube.com/watch?v=...">
+              <label class="form-label fw-bold small">Video URL (YouTube / M3U8 / Facebook / MP4) *</label>
+              <input type="text" name="video_url" class="form-control" required value="${escapeHtml(editVid ? editVid.video_url : '')}" placeholder="https://www.youtube.com/watch?v=... or .m3u8">
+              <span class="form-text fs-7">Supports full YouTube link, Shorts, M3U/M3U8 HLS streams, Facebook video embed.</span>
             </div>
+
             <div class="mb-3">
               <label class="form-label fw-bold small">Thumbnail Image URL</label>
-              <input type="text" name="thumbnail" class="form-control" placeholder="https://example.com/thumb.jpg">
+              <input type="text" name="thumbnail" class="form-control" value="${escapeHtml(editVid ? editVid.thumbnail || '' : '')}" placeholder="Auto-generated if blank for YouTube">
             </div>
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Description</label>
-              <textarea name="description" class="form-control" rows="2" placeholder="Brief video summary..."></textarea>
+              <label class="form-label fw-bold small">Description / Summary</label>
+              <textarea name="description" class="form-control" rows="2" placeholder="Brief video summary...">${escapeHtml(editVid ? editVid.description || '' : '')}</textarea>
             </div>
-            <button type="submit" class="btn btn-danger w-100 fw-bold"><i class="bi bi-play-circle me-1"></i> Publish Video</button>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-${editVid ? 'primary' : 'danger'} w-100 fw-bold">
+                <i class="bi bi-${editVid ? 'check-circle' : 'play-circle'} me-1"></i> ${editVid ? 'Update Video' : 'Publish Video'}
+              </button>
+              ${editVid ? `<a href="/admin/videos.php" class="btn btn-outline-secondary">Cancel</a>` : ''}
+            </div>
           </form>
         </div>
       </div>
+
+      <!-- Videos List / Grid Area -->
       <div class="col-md-8">
-        <!-- Search Filter -->
-        <div class="card border-0 shadow-sm p-3 mb-3 bg-white">
-          <form method="GET" action="/admin/videos.php">
-            <div class="input-group input-group-sm">
-              <input type="text" name="search" class="form-control" placeholder="Search video by title..." value="${escapeHtml(search)}">
-              <button class="btn btn-danger" type="submit"><i class="bi bi-search"></i> Search</button>
-              ${search ? `<a href="/admin/videos.php" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>` : ''}
+        <form id="bulkForm" action="/admin/videos.php" method="POST">
+          <input type="hidden" name="action" value="bulk_delete">
+
+          <!-- Filter & Bulk Bar -->
+          <div class="card border-0 shadow-sm p-3 mb-3 bg-white rounded-3">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-6">
+                <div class="input-group input-group-sm">
+                  <input type="text" name="search" form="searchForm" class="form-control" placeholder="Search videos..." value="${escapeHtml(search)}">
+                  <button class="btn btn-danger" form="searchForm" type="submit"><i class="bi bi-search"></i></button>
+                  ${search ? `<a href="/admin/videos.php" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>` : ''}
+                </div>
+              </div>
+              <div class="col-md-6 d-flex justify-content-end gap-2">
+                <button type="submit" onclick="return confirm('Delete selected videos in bulk?');" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-trash me-1"></i> Bulk Delete</button>
+                <div class="btn-group btn-group-sm">
+                  <a href="/admin/videos.php?view_mode=grid&search=${encodeURIComponent(search)}" class="btn btn-${viewMode === 'grid' ? 'danger' : 'outline-secondary'}"><i class="bi bi-grid-fill"></i> Grid</a>
+                  <a href="/admin/videos.php?view_mode=list&search=${encodeURIComponent(search)}" class="btn btn-${viewMode === 'list' ? 'danger' : 'outline-secondary'}"><i class="bi bi-list-task"></i> List</a>
+                </div>
+              </div>
             </div>
-          </form>
-        </div>
+          </div>
 
-        <div class="card-table">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Media Link</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="4" class="text-center py-4 text-muted">No video headlines found.</td></tr>'}
-            </tbody>
-          </table>
-        </div>
+          ${itemsHtml}
+        </form>
 
-        ${totalPages > 1 ? `<div class="d-flex justify-content-between align-items-center mt-3">
+        <form id="searchForm" method="GET" action="/admin/videos.php">
+          <input type="hidden" name="view_mode" value="${escapeHtml(viewMode)}">
+        </form>
+
+        ${totalPages > 1 ? `<div class="d-flex justify-content-between align-items-center mt-3 pt-2">
           <span class="small text-muted">Page ${page} of ${totalPages}</span>
           <ul class="pagination pagination-sm mb-0">
-            <li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="/admin/videos.php?search=${encodeURIComponent(search)}&page=${page - 1}">Previous</a></li>
+            <li class="page-item ${page <= 1 ? 'disabled' : ''}"><a class="page-link" href="/admin/videos.php?search=${encodeURIComponent(search)}&view_mode=${encodeURIComponent(viewMode)}&page=${page - 1}">Previous</a></li>
             <li class="page-item active"><span class="page-link bg-danger border-danger">${page}</span></li>
-            <li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="/admin/videos.php?search=${encodeURIComponent(search)}&page=${page + 1}">Next</a></li>
+            <li class="page-item ${page >= totalPages ? 'disabled' : ''}"><a class="page-link" href="/admin/videos.php?search=${encodeURIComponent(search)}&view_mode=${encodeURIComponent(viewMode)}&page=${page + 1}">Next</a></li>
           </ul>
         </div>` : ''}
       </div>
     </div>
+
+    <script>
+      function toggleSelectAll(master) {
+        document.querySelectorAll('.bulk-checkbox').forEach(cb => cb.checked = master.checked);
+      }
+    </script>
     ${renderAdminFooter()}`;
 }
 
@@ -1930,54 +2422,296 @@ export function renderAdminAdsView(data: any): string {
 }
 
 export function renderAdminMenusView(data: any): string {
-  const menus = data.menus || [];
-  let rowsHtml = '';
+  const categories = data.categories || [];
+  const pages = data.pages || [];
+  const topMenus = data.topMenus || [];
+  const headerParents = data.headerParents || [];
+  const headerMenus = data.headerMenus || [];
+  const footerMenus = data.footerMenus || [];
+  const editMenu = data.editMenu || null;
+  const msg = data.msg || '';
 
-  menus.forEach((m: any) => {
-    rowsHtml += `<tr>
-      <td>${m.id}</td>
-      <td class="fw-bold">${escapeHtml(m.title)}</td>
-      <td><code>${escapeHtml(m.url)}</code></td>
-      <td><a href="/admin/menus.php?action=delete&id=${m.id}" class="btn btn-sm btn-danger" onclick="return confirm('Delete menu?');"><i class="bi bi-trash"></i></a></td>
+  let catOptions = '';
+  categories.forEach((cat: any) => {
+    catOptions += `<option value="${escapeHtml(cat.slug)}">${escapeHtml(cat.name)}</option>`;
+  });
+
+  let pageOptions = '';
+  pages.forEach((p: any) => {
+    pageOptions += `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.title)}</option>`;
+  });
+
+  let headerParentOptions = '';
+  headerParents.forEach((hp: any) => {
+    if (!editMenu || editMenu.id !== hp.id) {
+      const selected = (editMenu && editMenu.parent_id === hp.id) ? 'selected' : '';
+      headerParentOptions += `<option value="${hp.id}" ${selected}>Submenu under: ${escapeHtml(hp.title)}</option>`;
+    }
+  });
+
+  // Top Menus Table Rows
+  let topRows = '';
+  topMenus.forEach((tm: any) => {
+    topRows += `<tr>
+      <td>${tm.item_order}</td>
+      <td class="fw-bold">${escapeHtml(tm.title)}</td>
+      <td><code>${escapeHtml(tm.url)}</code></td>
+      <td><span class="badge bg-secondary">${tm.target || '_self'}</span></td>
+      <td class="text-end">
+        <a href="/admin/menus.php?action=edit&id=${tm.id}" class="btn btn-sm btn-outline-primary me-1"><i class="bi bi-pencil"></i></a>
+        <a href="/admin/menus.php?action=delete&id=${tm.id}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this top menu item?');"><i class="bi bi-trash"></i></a>
+      </td>
     </tr>`;
   });
 
-  return `${renderAdminHeader('Custom Menus Manager', 'menus', data.adminName)}
+  // Header Menus Table Rows
+  let headerRows = '';
+  headerMenus.forEach((hm: any) => {
+    const isChild = hm.is_child;
+    const indent = isChild ? '<span class="text-muted ms-3">&mdash;&gt;</span> <span class="badge bg-info text-dark me-1">Submenu</span> ' : '<span class="fw-bold text-danger me-1"><i class="bi bi-folder2-open me-1"></i> Main Item:</span> ';
+    headerRows += `<tr>
+      <td>${hm.item_order}</td>
+      <td>${indent} <strong>${escapeHtml(hm.title)}</strong></td>
+      <td><code>${escapeHtml(hm.url)}</code></td>
+      <td><span class="badge bg-secondary">${hm.target || '_self'}</span></td>
+      <td class="text-end">
+        <a href="/admin/menus.php?action=edit&id=${hm.id}" class="btn btn-sm btn-outline-primary me-1"><i class="bi bi-pencil"></i></a>
+        <a href="/admin/menus.php?action=delete&id=${hm.id}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete menu item and submenus?');"><i class="bi bi-trash"></i></a>
+      </td>
+    </tr>`;
+  });
+
+  // Footer Menus Table Rows
+  let footerRows = '';
+  footerMenus.forEach((fm: any) => {
+    footerRows += `<tr>
+      <td>${fm.item_order}</td>
+      <td class="fw-bold">${escapeHtml(fm.title)}</td>
+      <td><code>${escapeHtml(fm.url)}</code></td>
+      <td><span class="badge bg-secondary">${fm.target || '_self'}</span></td>
+      <td class="text-end">
+        <a href="/admin/menus.php?action=edit&id=${fm.id}" class="btn btn-sm btn-outline-primary me-1"><i class="bi bi-pencil"></i></a>
+        <a href="/admin/menus.php?action=delete&id=${fm.id}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete footer menu link?');"><i class="bi bi-trash"></i></a>
+      </td>
+    </tr>`;
+  });
+
+  const loc = editMenu ? editMenu.location : 'header';
+
+  return `${renderAdminHeader('Menu Management System (Top, Header & Footer)', 'menus', data.adminName)}
+    ${msg ? `<div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
+      <i class="bi bi-check-circle-fill me-2"></i> ${escapeHtml(msg)}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>` : ''}
+
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+      <div>
+        <h4 class="fw-bold mb-1"><i class="bi bi-menu-button-wide text-danger me-2"></i> Menu Management System</h4>
+        <p class="text-muted small mb-0">Manage Top Bar, Main Header Navigation, and Footer Menus effortlessly.</p>
+      </div>
+      <div>
+        <a href="/admin/menus.php?action=populate_defaults" class="btn btn-outline-danger btn-sm fw-bold shadow-sm" onclick="return confirm('Populate default categories, pages, and standard links into Menu Manager?');">
+          <i class="bi bi-lightning-charge-fill me-1"></i> Auto-Populate Default Categories into Menus
+        </a>
+      </div>
+    </div>
+
     <div class="row g-4">
-      <div class="col-md-4">
-        <div class="card border p-3 bg-white shadow-sm">
-          <h5 class="fw-bold mb-3">Add Menu Item</h5>
+      <!-- Add / Edit Menu Form -->
+      <div class="col-lg-4">
+        <div class="card border p-4 bg-white shadow-sm rounded-3">
+          <h5 class="fw-bold mb-3 border-bottom pb-2">
+            ${editMenu ? '<i class="bi bi-pencil-square text-primary me-2"></i>Edit Menu Item' : '<i class="bi bi-plus-circle text-danger me-2"></i>Add New Menu Link'}
+          </h5>
+
           <form action="/admin/menus.php" method="POST">
+            ${editMenu ? `<input type="hidden" name="edit_id" value="${editMenu.id}">` : ''}
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">Menu Label</label>
-              <input type="text" name="title" class="form-control" required>
+              <label class="form-label fw-bold small">Menu Placement *</label>
+              <select name="location" id="menu_location_select" class="form-select">
+                <option value="top" ${loc === 'top' ? 'selected' : ''}>Top Utility Bar (শীর্ষ বার নেভিগেশন)</option>
+                <option value="header" ${loc === 'header' ? 'selected' : ''}>Header Main Nav (প্রধান ক্যাটাগরি নেভিগেশন)</option>
+                <option value="footer" ${loc === 'footer' ? 'selected' : ''}>Footer Links (ফুটার লিঙ্ক)</option>
+              </select>
             </div>
+
+            <div class="mb-3" id="parent_menu_box">
+              <label class="form-label fw-bold small">Parent Menu (For Dropdowns)</label>
+              <select name="parent_id" class="form-select">
+                <option value="0">None (Top-Level Item)</option>
+                ${headerParentOptions}
+              </select>
+              <small class="text-muted">Select a parent item to create a dropdown child link.</small>
+            </div>
+
             <div class="mb-3">
-              <label class="form-label fw-bold small">URL Path</label>
-              <input type="text" name="url" class="form-control" required placeholder="/category.php?slug=sports">
+              <label class="form-label fw-bold small">Link Type Quick Select</label>
+              <select id="link_type_select" name="link_type" class="form-select" onchange="handleLinkTypeChange()">
+                <option value="custom">Custom URL / External Link</option>
+                <option value="category">Quick Select: News Category</option>
+                <option value="page">Quick Select: Site Page</option>
+              </select>
             </div>
-            <button type="submit" class="btn btn-danger w-100 fw-bold"><i class="bi bi-plus-lg me-1"></i> Add Menu</button>
+
+            <div class="mb-3 d-none" id="cat_select_box">
+              <label class="form-label fw-bold small">Select Category</label>
+              <select name="cat_slug" class="form-select">
+                <option value="">-- Choose Category --</option>
+                ${catOptions}
+              </select>
+            </div>
+
+            <div class="mb-3 d-none" id="page_select_box">
+              <label class="form-label fw-bold small">Select Page</label>
+              <select name="page_slug" class="form-select">
+                <option value="">-- Choose Page --</option>
+                ${pageOptions}
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold small">Menu Label / Title *</label>
+              <input type="text" name="title" class="form-control" value="${editMenu ? escapeHtml(editMenu.title) : ''}" placeholder="e.g. National, Politics, Contact">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold small">Target URL *</label>
+              <input type="text" name="url" class="form-control" value="${editMenu ? escapeHtml(editMenu.url) : ''}" placeholder="/category.php?slug=national or https://...">
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-bold small">Target Window</label>
+                <select name="target" class="form-select">
+                  <option value="_self" ${editMenu && editMenu.target === '_self' ? 'selected' : ''}>Same Tab (_self)</option>
+                  <option value="_blank" ${editMenu && editMenu.target === '_blank' ? 'selected' : ''}>New Tab (_blank)</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Order / Position</label>
+                <input type="number" name="item_order" class="form-control" value="${editMenu ? editMenu.item_order : '0'}">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-danger w-100 fw-bold shadow-sm py-2">
+              <i class="bi bi-check-circle me-1"></i> ${editMenu ? 'Update Menu Item' : 'Add to Navigation'}
+            </button>
+            ${editMenu ? `<a href="/admin/menus.php" class="btn btn-outline-secondary w-100 mt-2">Cancel Edit</a>` : ''}
           </form>
         </div>
       </div>
-      <div class="col-md-8">
-        <div class="card-table">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>URL</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="4" class="text-center py-4 text-muted">No custom menus added yet.</td></tr>'}
-            </tbody>
-          </table>
+
+      <!-- Menu Lists -->
+      <div class="col-lg-8">
+        <ul class="nav nav-tabs fw-bold mb-3" id="menuTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active text-danger" id="header-tab" data-bs-toggle="tab" data-bs-target="#header-menus-pane" type="button" role="tab"><i class="bi bi-layout-three-columns me-1"></i> Header Menu (${headerMenus.length})</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link text-dark" id="top-tab" data-bs-toggle="tab" data-bs-target="#top-menus-pane" type="button" role="tab"><i class="bi bi-border-top me-1"></i> Top Bar Menu (${topMenus.length})</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link text-dark" id="footer-tab" data-bs-toggle="tab" data-bs-target="#footer-menus-pane" type="button" role="tab"><i class="bi bi-layout-text-window-reverse me-1"></i> Footer Menu (${footerMenus.length})</button>
+          </li>
+        </ul>
+
+        <div class="tab-content" id="menuTabsContent">
+          <!-- Header Menu Tab -->
+          <div class="tab-pane fade show active" id="header-menus-pane" role="tabpanel">
+            <div class="card border shadow-sm rounded-3">
+              <div class="card-header bg-white py-3">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-list-stars me-2 text-danger"></i> Header Navigation Menu Sequence</h6>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 70px;">Order</th>
+                      <th>Menu Title</th>
+                      <th>URL</th>
+                      <th>Target</th>
+                      <th class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${headerRows || '<tr><td colspan="5" class="text-center py-4 text-muted">No header menus added yet. Click "Auto-Populate Default Categories" to seed categories.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Menu Tab -->
+          <div class="tab-pane fade" id="top-menus-pane" role="tabpanel">
+            <div class="card border shadow-sm rounded-3">
+              <div class="card-header bg-white py-3">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-border-top me-2 text-danger"></i> Top Bar Navigation Menu</h6>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 70px;">Order</th>
+                      <th>Menu Title</th>
+                      <th>URL</th>
+                      <th>Target</th>
+                      <th class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${topRows || '<tr><td colspan="5" class="text-center py-4 text-muted">No top bar menus added yet.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Footer Menu Tab -->
+          <div class="tab-pane fade" id="footer-menus-pane" role="tabpanel">
+            <div class="card border shadow-sm rounded-3">
+              <div class="card-header bg-white py-3">
+                <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-layout-text-window-reverse me-2 text-danger"></i> Footer Links Menu</h6>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 70px;">Order</th>
+                      <th>Menu Title</th>
+                      <th>URL</th>
+                      <th>Target</th>
+                      <th class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${footerRows || '<tr><td colspan="5" class="text-center py-4 text-muted">No footer menus added yet.</td></tr>'}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+
+    <script>
+      function handleLinkTypeChange() {
+        const val = document.getElementById('link_type_select').value;
+        const catBox = document.getElementById('cat_select_box');
+        const pageBox = document.getElementById('page_select_box');
+        if (val === 'category') {
+          catBox.classList.remove('d-none');
+          pageBox.classList.add('d-none');
+        } else if (val === 'page') {
+          pageBox.classList.remove('d-none');
+          catBox.classList.add('d-none');
+        } else {
+          catBox.classList.add('d-none');
+          pageBox.classList.add('d-none');
+        }
+      }
+    </script>
     ${renderAdminFooter()}`;
 }
 
@@ -2442,5 +3176,222 @@ export function renderAdminColorsView(data: any): string {
     </div>
     ${renderAdminFooter()}`;
 }
+
+export function renderInstallerPage(data: { step: number; isInstalled: boolean; sessionData: any; success?: string; error?: string }): string {
+  const { step, isInstalled, sessionData, success, error } = data;
+
+  if (isInstalled) {
+    return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newspaper CMS - System Already Installed</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<body class="bg-light d-flex align-items-center min-vh-100 py-4">
+    <div class="container" style="max-width: 600px;">
+        <div class="card border-0 shadow-lg rounded-4">
+            <div class="card-header bg-danger text-white p-4 text-center rounded-top-4">
+                <h3 class="fw-bold mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Newspaper CMS is Already Installed</h3>
+                <small class="opacity-75">Installation Wizard is Locked for Security</small>
+            </div>
+            <div class="card-body p-4 p-md-5 text-center">
+                <div class="alert alert-warning py-3 mb-4 text-start">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>System Locked:</strong> Your Newspaper Portal CMS has already been configured and installed successfully.
+                    <hr class="my-2">
+                    <small class="text-muted">For security reasons, re-running the installation wizard is blocked. If you need to reinstall the system, manually delete the <code>installed.lock</code> file from your web server directory.</small>
+                </div>
+                <div class="d-grid gap-2 d-sm-flex justify-content-center">
+                    <a href="/index.php" class="btn btn-primary btn-lg fw-bold"><i class="bi bi-house-door me-2"></i>Go to Website Homepage</a>
+                    <a href="/admin/login.php" class="btn btn-dark btn-lg fw-bold"><i class="bi bi-speedometer2 me-2"></i>Go to Admin Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+  }
+
+  const dbType = sessionData?.db_type || 'mysql';
+  const dbHost = sessionData?.db_host || 'localhost';
+  const dbName = sessionData?.db_name || 'newsportal';
+  const dbUser = sessionData?.db_user || 'root';
+  const dbPass = sessionData?.db_pass || '';
+
+  const siteName = sessionData?.site_name || 'দৈনিক দিগন্ত';
+  const adminUser = sessionData?.admin_user || 'admin';
+  const adminEmail = sessionData?.admin_email || 'admin@newsportal.com';
+  const adminPass = sessionData?.admin_pass || 'admin123';
+
+  let stepBody = '';
+
+  if (step === 1) {
+    stepBody = `
+      <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-database-check text-danger me-2"></i>Step 1: Database Connection Setup</h5>
+      <form action="/install.php?step=1" method="POST">
+          <div class="mb-3">
+              <label class="form-label fw-bold">Database Driver</label>
+              <select name="db_type" class="form-select form-select-lg">
+                  <option value="mysql" ${dbType === 'mysql' ? 'selected' : ''}>MySQL / MariaDB (Recommended for cPanel / phpMyAdmin)</option>
+                  <option value="sqlite" ${dbType === 'sqlite' ? 'selected' : ''}>SQLite (Embedded / Zero Configuration)</option>
+              </select>
+              <small class="text-muted">For cPanel web hosting, select MySQL / MariaDB.</small>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label fw-bold">Database Host</label>
+              <input type="text" name="db_host" class="form-control" value="${escapeHtml(dbHost)}" required>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label fw-bold">Database Name</label>
+              <input type="text" name="db_name" class="form-control" value="${escapeHtml(dbName)}" required>
+              <small class="text-muted">Your MySQL database name created in cPanel MySQL Wizard.</small>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label fw-bold">Database Username</label>
+              <input type="text" name="db_user" class="form-control" value="${escapeHtml(dbUser)}" required>
+          </div>
+
+          <div class="mb-4">
+              <label class="form-label fw-bold">Database Password</label>
+              <input type="password" name="db_pass" class="form-control" value="${escapeHtml(dbPass)}" placeholder="Leave blank if no password">
+          </div>
+
+          <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold shadow-sm">
+              Test Connection & Continue &rarr;
+          </button>
+      </form>`;
+  } else if (step === 2) {
+    stepBody = `
+      <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-shield-lock text-danger me-2"></i>Step 2: Newspaper Title & Administrator Account</h5>
+      <form action="/install.php?step=2" method="POST">
+          <div class="mb-3">
+              <label class="form-label fw-bold">Website Name / Title</label>
+              <input type="text" name="site_name" class="form-control" value="${escapeHtml(siteName)}" required>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label fw-bold">Admin Username</label>
+              <input type="text" name="admin_user" class="form-control" value="${escapeHtml(adminUser)}" required>
+          </div>
+
+          <div class="mb-3">
+              <label class="form-label fw-bold">Admin Email Address</label>
+              <input type="email" name="admin_email" class="form-control" value="${escapeHtml(adminEmail)}" required>
+          </div>
+
+          <div class="mb-4">
+              <label class="form-label fw-bold">Admin Password</label>
+              <input type="password" name="admin_pass" class="form-control" value="${escapeHtml(adminPass)}" required>
+          </div>
+
+          <div class="d-flex gap-2">
+              <a href="/install.php?step=1" class="btn btn-outline-secondary btn-lg fw-bold">&larr; Back</a>
+              <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold shadow-sm">Save & Proceed &rarr;</button>
+          </div>
+      </form>`;
+  } else if (step === 3) {
+    if (success) {
+      stepBody = `
+        <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-gear-fill text-danger me-2"></i>Step 3: Database & Installation Finalization</h5>
+        <div class="alert alert-success p-3 mb-4 shadow-sm border-0">
+            <h5 class="fw-bold mb-2"><i class="bi bi-check-circle-fill me-2"></i>${escapeHtml(success)}</h5>
+            <p class="mb-0 small">Database tables, news categories, default advertisements, and admin user account have been configured successfully!</p>
+        </div>
+
+        <div class="card bg-light p-3 border mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-2"><i class="bi bi-key me-1"></i> Admin Login Summary</h6>
+            <ul class="mb-0 small text-muted list-unstyled">
+                <li><strong>Admin Username:</strong> <code>${escapeHtml(adminUser)}</code></li>
+                <li><strong>Admin Email:</strong> <code>${escapeHtml(adminEmail)}</code></li>
+                <li><strong>Website Name:</strong> ${escapeHtml(siteName)}</li>
+            </ul>
+        </div>
+
+        <div class="alert alert-warning py-2 px-3 mb-4 small">
+            <i class="bi bi-shield-exclamation me-1"></i> <strong>Security Notice:</strong> An <code>installed.lock</code> file has been created.
+        </div>
+
+        <div class="d-grid gap-2">
+            <a href="/index.php" class="btn btn-primary btn-lg fw-bold"><i class="bi bi-house-door me-2"></i>Go to Website Homepage</a>
+            <a href="/admin/login.php" class="btn btn-dark btn-lg fw-bold"><i class="bi bi-speedometer2 me-2"></i>Go to Admin Dashboard</a>
+        </div>`;
+    } else {
+      stepBody = `
+        <h5 class="fw-bold mb-3 text-dark"><i class="bi bi-gear-fill text-danger me-2"></i>Step 3: Database & Installation Finalization</h5>
+        <div class="card bg-light p-3 border mb-4">
+            <h6 class="fw-bold text-dark border-bottom pb-2 mb-2"><i class="bi bi-list-check me-2"></i>Installation Summary</h6>
+            <ul class="mb-0 small text-muted">
+                <li><strong>Database Driver:</strong> ${escapeHtml(dbType.toUpperCase())}</li>
+                <li><strong>Database Name:</strong> ${escapeHtml(dbName)}</li>
+                <li><strong>Database Host:</strong> ${escapeHtml(dbHost)}</li>
+                <li><strong>Admin Username:</strong> ${escapeHtml(adminUser)}</li>
+            </ul>
+        </div>
+
+        <form action="/install.php?step=3" method="POST">
+            <p class="text-muted small mb-3">Click the button below to auto-import database SQL schema, seed core news categories, default settings, ad slots, and initialize admin user.</p>
+            
+            <div class="d-flex gap-2">
+                <a href="/install.php?step=2" class="btn btn-outline-secondary btn-lg fw-bold">&larr; Back</a>
+                <button type="submit" class="btn btn-success btn-lg w-100 fw-bold shadow-sm"><i class="bi bi-cloud-download me-2"></i>Finalize Installation & Import Database</button>
+            </div>
+        </form>`;
+    }
+  }
+
+  return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newspaper CMS Automated Installer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        .installer-card { border: none; border-radius: 12px; overflow: hidden; }
+        .step-pill { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    </style>
+</head>
+<body class="d-flex align-items-center min-vh-100 py-4">
+
+<div class="container" style="max-width: 680px;">
+    <div class="card installer-card shadow-lg">
+        <div class="card-header bg-danger text-white p-4 text-center">
+            <h3 class="fw-bold mb-1"><i class="bi bi-newspaper me-2"></i>Newspaper CMS Installation Wizard</h3>
+            <p class="mb-0 small text-white-50">Automated cPanel, MySQL & phpMyAdmin Setup Assistant</p>
+        </div>
+
+        <div class="bg-light p-3 border-bottom d-flex justify-content-around text-center">
+            <div class="d-flex align-items-center gap-2">
+                <span class="step-pill ${step >= 1 ? 'bg-danger text-white' : 'bg-secondary text-white'}">1</span>
+                <span class="fw-semibold small ${step >= 1 ? 'text-dark' : 'text-muted'}">Database</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="step-pill ${step >= 2 ? 'bg-danger text-white' : 'bg-secondary text-white'}">2</span>
+                <span class="fw-semibold small ${step >= 2 ? 'text-dark' : 'text-muted'}">Site & Admin</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="step-pill ${step >= 3 ? 'bg-danger text-white' : 'bg-secondary text-white'}">3</span>
+                <span class="fw-semibold small ${step >= 3 ? 'text-dark' : 'text-muted'}">Finalize</span>
+            </div>
+        </div>
+
+        <div class="card-body p-4 p-md-5">
+            ${error ? `<div class="alert alert-danger shadow-sm border-0 mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>${escapeHtml(error)}</div>` : ''}
+            ${stepBody}
+        </div>
+    </div>
+</div>
+
+</body>
+</html>`;
+}
+
 
 

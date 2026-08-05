@@ -5,6 +5,70 @@
 
 require_once __DIR__ . '/db.php';
 
+// Convert video URL to embed or stream metadata
+function format_video_embed_url($url) {
+    if (empty($url)) return ['embedUrl' => '', 'isHls' => false, 'isDirectMp4' => false, 'isFacebook' => false, 'youtubeId' => null];
+    $str = trim($url);
+
+    // YouTube matchers
+    $ytReg = '/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\\s]{11})/';
+    if (preg_match($ytReg, $str, $matches)) {
+        $youtubeId = $matches[1];
+        return [
+            'embedUrl' => "https://www.youtube.com/embed/{$youtubeId}?autoplay=0&rel=0",
+            'isHls' => false,
+            'isDirectMp4' => false,
+            'isFacebook' => false,
+            'youtubeId' => $youtubeId
+        ];
+    }
+
+    // M3U or M3U8 (HLS stream)
+    if (strpos($str, '.m3u8') !== false || strpos($str, '.m3u') !== false) {
+        return [
+            'embedUrl' => $str,
+            'isHls' => true,
+            'isDirectMp4' => false,
+            'isFacebook' => false,
+            'youtubeId' => null
+        ];
+    }
+
+    // Facebook matchers
+    if (strpos($str, 'facebook.com') !== false || strpos($str, 'fb.watch') !== false) {
+        $fbUrl = $str;
+        if (strpos($str, 'facebook.com/plugins/video.php') === false) {
+            $fbUrl = "https://www.facebook.com/plugins/video.php?href=" . urlencode($str) . "&show_text=false";
+        }
+        return [
+            'embedUrl' => $fbUrl,
+            'isHls' => false,
+            'isDirectMp4' => false,
+            'isFacebook' => true,
+            'youtubeId' => null
+        ];
+    }
+
+    // Direct MP4 / WebM / OGG
+    if (preg_match('/\.(mp4|webm|ogg)($|\?)/i', $str)) {
+        return [
+            'embedUrl' => $str,
+            'isHls' => false,
+            'isDirectMp4' => true,
+            'isFacebook' => false,
+            'youtubeId' => null
+        ];
+    }
+
+    return [
+        'embedUrl' => $str,
+        'isHls' => false,
+        'isDirectMp4' => false,
+        'isFacebook' => false,
+        'youtubeId' => null
+    ];
+}
+
 // Installation status check
 function is_installed() {
     return file_exists(__DIR__ . '/../installed.lock');
@@ -863,6 +927,37 @@ function get_homepage_photos($limit = 8) {
         $stmt->bindValue(1, (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
+}
+
+// Menu Fetching Function for Top Bar, Header, and Footer
+function get_menus($location = 'header') {
+    $db = get_db_connection();
+    try {
+        $stmt = $db->prepare("SELECT * FROM menus WHERE location = ? AND status = 1 ORDER BY item_order ASC, id ASC");
+        $stmt->execute([$location]);
+        $items = $stmt->fetchAll();
+
+        $parents = [];
+        $childrenMap = [];
+
+        foreach ($items as $item) {
+            $parentId = (int)($item['parent_id'] ?? 0);
+            if ($parentId === 0) {
+                $parents[] = $item;
+            } else {
+                $childrenMap[$parentId][] = $item;
+            }
+        }
+
+        foreach ($parents as &$parent) {
+            $pid = (int)$parent['id'];
+            $parent['children'] = $childrenMap[$pid] ?? [];
+        }
+
+        return $parents;
     } catch (Exception $e) {
         return [];
     }

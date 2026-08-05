@@ -92,6 +92,9 @@ if (isset($_GET['msg']) && $_GET['msg'] === 'deleted') {
     $msg = "Menu item deleted!";
 }
 
+// Fetch top bar menus
+$top_menus = $db->query("SELECT * FROM menus WHERE location = 'top' ORDER BY item_order ASC, id ASC")->fetchAll();
+
 // Fetch header top parents and children
 $header_parents = $db->query("SELECT * FROM menus WHERE location = 'header' AND parent_id = 0 ORDER BY item_order ASC, id ASC")->fetchAll();
 $header_menus = [];
@@ -129,8 +132,9 @@ $footer_menus = $db->query("SELECT * FROM menus WHERE location = 'footer' ORDER 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Menu Placement *</label>
                     <select name="location" id="location_select" class="form-select" onchange="toggleParentBox()">
-                        <option value="header" <?= ($edit_menu && $edit_menu['location'] === 'header') ? 'selected' : '' ?>>Header Navigation Menu</option>
-                        <option value="footer" <?= ($edit_menu && $edit_menu['location'] === 'footer') ? 'selected' : '' ?>>Footer Menu</option>
+                        <option value="top" <?= ($edit_menu && $edit_menu['location'] === 'top') ? 'selected' : '' ?>>Top Utility Bar (শীর্ষ বার নেভিগেশন)</option>
+                        <option value="header" <?= ($edit_menu && $edit_menu['location'] === 'header') ? 'selected' : '' ?>>Header Navigation Menu (প্রধান ক্যাটাগরি নেভিগেশন)</option>
+                        <option value="footer" <?= ($edit_menu && $edit_menu['location'] === 'footer') ? 'selected' : '' ?>>Footer Menu (ফুটার লিঙ্ক)</option>
                     </select>
                 </div>
 

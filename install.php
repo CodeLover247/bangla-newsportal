@@ -180,6 +180,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 ensure_custom_author_columns($pdo);
                 ensure_all_ad_positions_and_settings($pdo);
+                ensure_homepage_sections_table($pdo);
+                ensure_default_menus($pdo);
 
                 // Update / Create Admin Account Credentials
                 $admin_user = $_SESSION['admin_user'] ?? 'admin';

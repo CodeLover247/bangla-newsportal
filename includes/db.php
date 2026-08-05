@@ -65,6 +65,7 @@ function get_db_connection() {
                 ensure_all_ad_positions_and_settings($pdo);
                 ensure_homepage_sections_table($pdo);
                 ensure_views_and_date_columns($pdo);
+                ensure_default_menus($pdo);
                 $connected = true;
             } catch (Exception $e) {
                 // Fallback to SQLite
@@ -93,6 +94,7 @@ function get_db_connection() {
             ensure_all_ad_positions_and_settings($pdo);
             ensure_homepage_sections_table($pdo);
             ensure_database_indexes($pdo);
+            ensure_default_menus($pdo);
         }
         return $pdo;
     } catch (PDOException $e) {
@@ -777,6 +779,61 @@ function ensure_views_and_date_columns($pdo) {
     } catch (Exception $e) {}
     try {
         $pdo->exec("ALTER TABLE posts ADD COLUMN views INTEGER DEFAULT 0");
+    } catch (Exception $e) {}
+}
+
+function ensure_default_menus($pdo) {
+    try {
+        $check = $pdo->query("SELECT COUNT(*) FROM menus");
+        if ($check && (int)$check->fetchColumn() === 0) {
+            // Seed Top Bar
+            $topMenus = [
+                ['আমাদের সম্পর্কে', '/page.php?slug=about-us', 1],
+                ['যোগাযোগ', '/contact.php', 2],
+                ['গোপনীয়তা নীতি', '/page.php?slug=privacy-policy', 3],
+                ['ব্যবহারের শর্তাবলী', '/page.php?slug=terms', 4]
+            ];
+            $stmt = $pdo->prepare("INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES ('top', 0, ?, ?, ?, '_self', 1)");
+            foreach ($topMenus as $tm) {
+                $stmt->execute([$tm[0], $tm[1], $tm[2]]);
+            }
+
+            // Seed Header Nav
+            $stmtH = $pdo->prepare("INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES ('header', ?, ?, ?, ?, '_self', 1)");
+            $stmtH->execute([0, 'প্রচ্ছদ', '/', 1]);
+
+            $cats = $pdo->query("SELECT * FROM categories WHERE status = 1 ORDER BY cat_order ASC, id ASC")->fetchAll();
+            $order = 2;
+            $catMap = [];
+            foreach ($cats as $cat) {
+                if ($cat['parent_id'] == 0) {
+                    $stmtH->execute([0, $cat['name'], '/category.php?slug=' . $cat['slug'], $order++]);
+                    $lastId = $pdo->lastInsertId();
+                    if ($lastId) $catMap[$cat['id']] = $lastId;
+                }
+            }
+            foreach ($cats as $cat) {
+                if ($cat['parent_id'] > 0 && isset($catMap[$cat['parent_id']])) {
+                    $stmtH->execute([$catMap[$cat['parent_id']], $cat['name'], '/category.php?slug=' . $cat['slug'], 1]);
+                }
+            }
+
+            $stmtH->execute([0, 'ছবি গ্যালারি', '/gallery.php', $order++]);
+            $stmtH->execute([0, 'ভিডিও খবর', '/video.php', $order++]);
+
+            // Seed Footer
+            $footerMenus = [
+                ['আমাদের সম্পর্কে', '/page.php?slug=about-us', 1],
+                ['যোগাযোগ', '/contact.php', 2],
+                ['গোপনীয়তা নীতি', '/page.php?slug=privacy-policy', 3],
+                ['ব্যবহারের শর্তাবলী', '/page.php?slug=terms', 4],
+                ['বিজ্ঞাপন দিন', '/page.php?slug=advertising', 5]
+            ];
+            $stmtF = $pdo->prepare("INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES ('footer', 0, ?, ?, ?, '_self', 1)");
+            foreach ($footerMenus as $fm) {
+                $stmtF->execute([$fm[0], $fm[1], $fm[2]]);
+            }
+        }
     } catch (Exception $e) {}
 }
 

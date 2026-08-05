@@ -25,10 +25,12 @@ import {
   convertEnToBn,
   timeAgo,
   getCategoryDisplayName,
+  seedDefaultMenus,
   runQuery,
   queryAll,
   queryOne,
-  slugify
+  slugify,
+  formatVideoEmbedUrl
 } from './src/db.js';
 import {
   renderHomeView,
@@ -57,11 +59,16 @@ import {
   renderAdminSeoView,
   renderAdminSettingsView,
   renderAdminUsersView,
-  renderAdminColorsView
+  renderAdminColorsView,
+  renderInstallerPage
 } from './src/views.js';
 
 const app = express();
 const PORT = 3000;
+
+function isInstalled(): boolean {
+  return fs.existsSync(path.join(process.cwd(), 'installed.lock'));
+}
 
 // Ensure upload directories exist
 const uploadDirs = ['uploads', 'uploads/posts', 'uploads/category', 'uploads/media'];
@@ -150,7 +157,9 @@ async function startServer() {
     res.locals.meta_desc = metaDesc;
     res.locals.full_date_str = fullDateStr;
     res.locals.categories = getCategories(0, true);
+    res.locals.custom_top_menus = getMenus('top');
     res.locals.custom_header_menus = getMenus('header');
+    res.locals.custom_footer_menus = getMenus('footer');
     res.locals.breaking_news = getBreakingNews(6);
     res.locals.sidebar_latest = getPosts({ limit: 6 });
     res.locals.sidebar_popular = getPosts({ limit: 6, order_by: 'p.views DESC' });
@@ -163,6 +172,69 @@ async function startServer() {
     res.locals.fallback_img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=1200&auto=format&fit=crop&q=80';
 
     next();
+  });
+
+  /* ============================================================
+     Installation Status Guard & Wizard
+     ============================================================ */
+  app.use((req: any, res: any, next: any) => {
+    const isStatic = req.path.startsWith('/assets') || req.path.startsWith('/uploads');
+    const isInstall = req.path === '/install.php';
+
+    if (!isInstalled() && !isStatic && !isInstall) {
+      return res.redirect('/install.php');
+    }
+    next();
+  });
+
+  app.get('/install.php', (req: any, res: any) => {
+    if (isInstalled()) {
+      return res.send(renderInstallerPage({ step: 1, isInstalled: true, sessionData: req.session }));
+    }
+    const step = Math.max(1, Math.min(3, parseInt(req.query.step as string) || 1));
+    res.send(renderInstallerPage({ step, isInstalled: false, sessionData: req.session }));
+  });
+
+  app.post('/install.php', (req: any, res: any) => {
+    if (isInstalled()) {
+      return res.send(renderInstallerPage({ step: 1, isInstalled: true, sessionData: req.session }));
+    }
+    const step = Math.max(1, Math.min(3, parseInt(req.query.step as string) || 1));
+
+    if (step === 1) {
+      req.session.db_type = req.body.db_type || 'mysql';
+      req.session.db_host = req.body.db_host || 'localhost';
+      req.session.db_name = req.body.db_name || 'newsportal';
+      req.session.db_user = req.body.db_user || 'root';
+      req.session.db_pass = req.body.db_pass || '';
+      return res.redirect('/install.php?step=2');
+    } else if (step === 2) {
+      req.session.site_name = req.body.site_name || 'দৈনিক দিগন্ত';
+      req.session.admin_user = req.body.admin_user || 'admin';
+      req.session.admin_email = req.body.admin_email || 'admin@newsportal.com';
+      req.session.admin_pass = req.body.admin_pass || 'admin123';
+      return res.redirect('/install.php?step=3');
+    } else if (step === 3) {
+      try {
+        fs.writeFileSync(path.join(process.cwd(), 'installed.lock'), 'Installed on ' + new Date().toISOString());
+        if (req.session.site_name) {
+          setSetting('site_name', req.session.site_name);
+        }
+        return res.send(renderInstallerPage({
+          step: 3,
+          isInstalled: false,
+          sessionData: req.session,
+          success: 'Installation & Database Auto-Import Completed Successfully!'
+        }));
+      } catch (e: any) {
+        return res.send(renderInstallerPage({
+          step: 3,
+          isInstalled: false,
+          sessionData: req.session,
+          error: 'Failed to create installed.lock file: ' + e.message
+        }));
+      }
+    }
   });
 
   /* ============================================================
@@ -513,26 +585,167 @@ async function startServer() {
   // Admin Homepage Layout
   app.get('/admin/homepage.php', (req: any, res: any) => {
     const action = req.query.action;
-    const id = req.query.id;
+    const id = Number(req.query.id || 0);
 
     if (action === 'delete' && id) {
-      runQuery('DELETE FROM homepage_sections WHERE id = ?', [Number(id)]);
-      return res.redirect('/admin/homepage.php');
+      runQuery('DELETE FROM homepage_sections WHERE id = ?', [id]);
+      return res.redirect('/admin/homepage.php?msg=deleted');
+    }
+
+    if (action === 'toggle_status' && id) {
+      const sec = queryOne('SELECT * FROM homepage_sections WHERE id = ?', [id]);
+      if (sec) {
+        runQuery('UPDATE homepage_sections SET status = ? WHERE id = ?', [sec.status === 1 ? 0 : 1, id]);
+      }
+      return res.redirect('/admin/homepage.php?msg=status_updated');
+    }
+
+    if ((action === 'move_up' || action === 'move_down') && id) {
+      const sections = getHomepageSections(false);
+      const currIdx = sections.findIndex((s: any) => s.id === id);
+      if (action === 'move_up' && currIdx > 0) {
+        const prev = sections[currIdx - 1];
+        const curr = sections[currIdx];
+        runQuery('UPDATE homepage_sections SET section_order = ? WHERE id = ?', [prev.section_order, curr.id]);
+        runQuery('UPDATE homepage_sections SET section_order = ? WHERE id = ?', [curr.section_order, prev.id]);
+      } else if (action === 'move_down' && currIdx >= 0 && currIdx < sections.length - 1) {
+        const next = sections[currIdx + 1];
+        const curr = sections[currIdx];
+        runQuery('UPDATE homepage_sections SET section_order = ? WHERE id = ?', [next.section_order, curr.id]);
+        runQuery('UPDATE homepage_sections SET section_order = ? WHERE id = ?', [curr.section_order, next.id]);
+      }
+      return res.redirect('/admin/homepage.php?msg=reordered');
+    }
+
+    if (action === 'apply_preset' && req.query.preset) {
+      const preset = String(req.query.preset);
+      runQuery('DELETE FROM homepage_sections');
+
+      const categories = getCategories(0, false);
+      const findCatId = (kw: string) => {
+        const found = categories.find((c: any) => c.name.toLowerCase().includes(kw.toLowerCase()));
+        return found ? found.id : 0;
+      };
+
+      const catNat = findCatId('জাতীয়') || findCatId('national');
+      const catBar = findCatId('বরিশাল') || findCatId('barishal');
+      const catPol = findCatId('রাজনীতি') || findCatId('politics');
+      const catEco = findCatId('অর্থনীতি') || findCatId('business');
+      const catSpo = findCatId('খেলা') || findCatId('sports');
+      const catEnt = findCatId('বিনোদন') || findCatId('entertainment');
+      const catTec = findCatId('প্রযুক্তি') || findCatId('tech');
+
+      const presetsData: Record<string, any[]> = {
+        classic_newspaper: [
+          { title: 'জাতীয় সংবাদ', cat: catNat, limit: 5, style: 'lead_side_list' },
+          { title: 'বরিশাল বিভাগ', cat: catBar, limit: 4, style: 'two_column_grid' },
+          { title: 'রাজনীতি', cat: catPol, limit: 4, style: 'bento_grid' },
+          { title: 'অর্থনীতি ও বাণিজ্য', cat: catEco, limit: 3, style: 'horizontal_cards' },
+          { title: 'খেলাধুলা', cat: catSpo, limit: 4, style: 'carousel_slider' },
+          { title: 'ভিডিও খবর ও প্রেস বুলেটিন', cat: 0, limit: 4, style: 'video_gallery_theater' },
+          { title: 'ছবি গ্যালারি', cat: 0, limit: 6, style: 'photo_gallery_grid' }
+        ],
+        modern_portal: [
+          { title: 'প্রধান খবর', cat: 0, limit: 3, style: 'bento_grid' },
+          { title: 'বরিশাল অঞ্চল', cat: catBar, limit: 4, style: 'horizontal_cards' },
+          { title: 'রাজনীতি ও রাষ্ট্র ব্যবস্থা', cat: catPol, limit: 4, style: 'two_column_grid' },
+          { title: 'সর্বশেষ স্পটলাইট', cat: 0, limit: 6, style: 'carousel_slider' },
+          { title: 'তথ্যপ্রযুক্তি ও আধুনিক গ্যাজেট', cat: catTec, limit: 4, style: 'lead_side_list' },
+          { title: 'ভিডিও থিয়েটার', cat: 0, limit: 4, style: 'video_gallery_theater' }
+        ],
+        magazine_spotlight: [
+          { title: 'স্পটলাইট হেডলাইনস', cat: 0, limit: 6, style: 'carousel_slider' },
+          { title: 'বিশেষ সংবাদ ও সাক্ষাৎকার', cat: catNat, limit: 5, style: 'lead_side_list' },
+          { title: 'ফটো অ্যালবাম গ্যালারি', cat: 0, limit: 6, style: 'photo_gallery_grid' },
+          { title: 'বিনোদন ও তারকার খবর', cat: catEnt, limit: 4, style: 'horizontal_cards' },
+          { title: 'ভিডিও বুলেটিন', cat: 0, limit: 4, style: 'video_gallery_theater' }
+        ],
+        compact_fast_news: [
+          { title: 'দ্রুত বুলেটিন খবর', cat: 0, limit: 8, style: 'compact_list' },
+          { title: 'জাতীয় খবর', cat: catNat, limit: 4, style: 'two_column_grid' },
+          { title: 'বরিশাল হাইলাইটস', cat: catBar, limit: 6, style: 'compact_list' },
+          { title: 'অর্থনীতি আপডেট', cat: catEco, limit: 4, style: 'horizontal_cards' },
+          { title: 'খেলাধুলার আপডেট', cat: catSpo, limit: 6, style: 'compact_list' }
+        ]
+      };
+
+      const selectedItems = presetsData[preset] || presetsData.classic_newspaper;
+      let ord = 1;
+      for (const item of selectedItems) {
+        runQuery(
+          'INSERT INTO homepage_sections (title, category_id, post_limit, layout_style, section_order, status) VALUES (?, ?, ?, ?, ?, 1)',
+          [item.title, item.cat, item.limit, item.style, ord++]
+        );
+      }
+      setSetting('home_layout_preset', preset);
+      return res.redirect('/admin/homepage.php?msg=preset_applied');
+    }
+
+    let editSection = null;
+    if (action === 'edit' && id) {
+      editSection = queryOne('SELECT * FROM homepage_sections WHERE id = ?', [id]);
     }
 
     const sections = getHomepageSections(false);
     const categories = getCategories(0, false);
-    res.send(renderAdminHomepageView({ adminName: res.locals.admin_name, sections, categories }));
+    const msg = req.query.msg || '';
+
+    res.send(renderAdminHomepageView({
+      adminName: res.locals.admin_name,
+      sections,
+      categories,
+      editSection,
+      msg,
+      preset: getSetting('home_layout_preset', 'classic_newspaper')
+    }));
   });
 
   app.post('/admin/homepage.php', (req: any, res: any) => {
-    const { title, category_id, post_limit } = req.body;
-    runQuery('INSERT INTO homepage_sections (title, category_id, post_limit, layout_style, section_order, status) VALUES (?, ?, ?, "lead_side_list", 1, 1)', [
-      title,
-      Number(category_id),
-      Number(post_limit || 5)
-    ]);
-    res.redirect('/admin/homepage.php');
+    const action = req.body.action || 'add_section';
+
+    if (action === 'global_settings') {
+      setSetting('home_hero_cat', req.body.home_hero_cat || '0');
+      setSetting('home_hero_limit', req.body.home_hero_limit || '5');
+      setSetting('home_show_videos', req.body.home_show_videos ? '1' : '0');
+      setSetting('home_show_photos', req.body.home_show_photos ? '1' : '0');
+      setSetting('home_show_breaking', req.body.home_show_breaking ? '1' : '0');
+      return res.redirect('/admin/homepage.php?msg=settings_updated');
+    }
+
+    if (action === 'edit_section') {
+      const id = Number(req.body.section_id || 0);
+      const title = String(req.body.title || '').trim();
+      const category_id = Number(req.body.category_id || 0);
+      const post_limit = Number(req.body.post_limit || 5);
+      const layout_style = String(req.body.layout_style || 'lead_side_list');
+      const section_order = Number(req.body.section_order || 1);
+      const status = req.body.status ? 1 : 0;
+
+      if (id > 0 && title) {
+        runQuery(
+          'UPDATE homepage_sections SET title = ?, category_id = ?, post_limit = ?, layout_style = ?, section_order = ?, status = ? WHERE id = ?',
+          [title, category_id, post_limit, layout_style, section_order, status, id]
+        );
+      }
+      return res.redirect('/admin/homepage.php?msg=updated');
+    }
+
+    // Default: Add Section
+    const title = String(req.body.title || '').trim();
+    const category_id = Number(req.body.category_id || 0);
+    const post_limit = Number(req.body.post_limit || 5);
+    const layout_style = String(req.body.layout_style || 'lead_side_list');
+    const status = req.body.status !== undefined ? (req.body.status ? 1 : 0) : 1;
+
+    if (title) {
+      const maxOrdRow = queryOne('SELECT MAX(section_order) as max_ord FROM homepage_sections');
+      const maxOrd = (maxOrdRow?.max_ord || 0) + 1;
+      runQuery(
+        'INSERT INTO homepage_sections (title, category_id, post_limit, layout_style, section_order, status) VALUES (?, ?, ?, ?, ?, ?)',
+        [title, category_id, post_limit, layout_style, maxOrd, status]
+      );
+    }
+    res.redirect('/admin/homepage.php?msg=added');
   });
 
   // Admin Comments
@@ -612,42 +825,242 @@ async function startServer() {
   // Admin Gallery
   app.get('/admin/gallery.php', (req: any, res: any) => {
     const action = req.query.action;
-    const id = req.query.id;
+    const id = Number(req.query.id || 0);
 
-    if (action === 'delete_album' && id) {
-      runQuery('DELETE FROM gallery_albums WHERE id = ?', [Number(id)]);
-      runQuery('DELETE FROM gallery_photos WHERE album_id = ?', [Number(id)]);
-      return res.redirect('/admin/gallery.php');
+    if ((action === 'delete_album' || action === 'delete') && id) {
+      runQuery('DELETE FROM gallery_albums WHERE id = ?', [id]);
+      runQuery('DELETE FROM gallery_photos WHERE album_id = ?', [id]);
+      return res.redirect('/admin/gallery.php?msg=deleted');
     }
 
-    const albums = getGalleryAlbumsWithPhotos(50);
-    res.send(renderAdminGalleryView({ adminName: res.locals.admin_name, albums }));
+    if (action === 'bulk_delete' && req.query.ids) {
+      const ids = String(req.query.ids).split(',').map(Number).filter(Boolean);
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        runQuery(`DELETE FROM gallery_albums WHERE id IN (${placeholders})`, ids);
+        runQuery(`DELETE FROM gallery_photos WHERE album_id IN (${placeholders})`, ids);
+      }
+      return res.redirect('/admin/gallery.php?msg=bulk_deleted');
+    }
+
+    const search = String(req.query.search || '').trim();
+    const view_mode = String(req.query.view_mode || 'grid');
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = 8;
+    const offset = (page - 1) * limit;
+
+    let countSql = 'SELECT COUNT(*) as count FROM gallery_albums';
+    let sql = 'SELECT * FROM gallery_albums';
+    let params: any[] = [];
+
+    if (search) {
+      countSql += ' WHERE title LIKE ? OR description LIKE ?';
+      sql += ' WHERE title LIKE ? OR description LIKE ?';
+      params = [`%${search}%`, `%${search}%`];
+    }
+
+    const countRow = queryOne(countSql, params);
+    const total = countRow ? countRow.count : 0;
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    sql += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+    const albums = queryAll(sql, params);
+
+    for (const alb of albums) {
+      alb.photos = queryAll('SELECT * FROM gallery_photos WHERE album_id = ? ORDER BY id ASC', [alb.id]);
+      alb.photo_count = alb.photos.length;
+    }
+
+    let editAlbum = null;
+    if (action === 'edit' && id) {
+      editAlbum = queryOne('SELECT * FROM gallery_albums WHERE id = ?', [id]);
+    }
+
+    res.send(renderAdminGalleryView({
+      adminName: res.locals.admin_name,
+      albums,
+      search,
+      view_mode,
+      page,
+      total_pages: totalPages,
+      editAlbum,
+      msg: req.query.msg || ''
+    }));
   });
 
   app.post('/admin/gallery.php', (req: any, res: any) => {
-    const { title, cover_image, description } = req.body;
-    runQuery('INSERT INTO gallery_albums (title, slug, cover_image, description) VALUES (?, ?, ?, ?)', [title, slugify(title), cover_image || '', description || '']);
-    res.redirect('/admin/gallery.php');
+    const action = req.body.action;
+
+    if (action === 'bulk_delete') {
+      let ids: number[] = [];
+      if (Array.isArray(req.body.album_ids)) {
+        ids = req.body.album_ids.map(Number).filter(Boolean);
+      } else if (req.body.album_ids) {
+        ids = String(req.body.album_ids).split(',').map(Number).filter(Boolean);
+      }
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        runQuery(`DELETE FROM gallery_albums WHERE id IN (${placeholders})`, ids);
+        runQuery(`DELETE FROM gallery_photos WHERE album_id IN (${placeholders})`, ids);
+      }
+      return res.redirect('/admin/gallery.php?msg=bulk_deleted');
+    }
+
+    if (action === 'edit') {
+      const id = Number(req.body.album_id || 0);
+      const title = String(req.body.title || '').trim();
+      const cover_image = String(req.body.cover_image || '').trim();
+      const description = String(req.body.description || '').trim();
+
+      if (id > 0 && title) {
+        runQuery(
+          'UPDATE gallery_albums SET title = ?, slug = ?, cover_image = ?, description = ? WHERE id = ?',
+          [title, slugify(title), cover_image, description, id]
+        );
+      }
+      return res.redirect('/admin/gallery.php?msg=updated');
+    }
+
+    const title = String(req.body.title || '').trim();
+    const cover_image = String(req.body.cover_image || '').trim();
+    const description = String(req.body.description || '').trim();
+
+    if (title) {
+      runQuery(
+        'INSERT INTO gallery_albums (title, slug, cover_image, description) VALUES (?, ?, ?, ?)',
+        [title, slugify(title), cover_image || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80', description]
+      );
+    }
+    res.redirect('/admin/gallery.php?msg=created');
   });
 
   // Admin Videos
   app.get('/admin/videos.php', (req: any, res: any) => {
     const action = req.query.action;
-    const id = req.query.id;
+    const id = Number(req.query.id || 0);
 
     if (action === 'delete' && id) {
-      runQuery('DELETE FROM videos WHERE id = ?', [Number(id)]);
-      return res.redirect('/admin/videos.php');
+      runQuery('DELETE FROM videos WHERE id = ?', [id]);
+      return res.redirect('/admin/videos.php?msg=deleted');
     }
 
-    const videos = getVideos(50);
-    res.send(renderAdminVideosView({ adminName: res.locals.admin_name, videos }));
+    if (action === 'bulk_delete' && req.query.ids) {
+      const ids = String(req.query.ids).split(',').map(Number).filter(Boolean);
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        runQuery(`DELETE FROM videos WHERE id IN (${placeholders})`, ids);
+      }
+      return res.redirect('/admin/videos.php?msg=bulk_deleted');
+    }
+
+    const search = String(req.query.search || '').trim();
+    const view_mode = String(req.query.view_mode || 'grid');
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = 8;
+    const offset = (page - 1) * limit;
+
+    let countSql = 'SELECT COUNT(*) as count FROM videos';
+    let sql = 'SELECT * FROM videos';
+    let params: any[] = [];
+
+    if (search) {
+      countSql += ' WHERE title LIKE ? OR description LIKE ?';
+      sql += ' WHERE title LIKE ? OR description LIKE ?';
+      params = [`%${search}%`, `%${search}%`];
+    }
+
+    const countRow = queryOne(countSql, params);
+    const total = countRow ? countRow.count : 0;
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    sql += ` ORDER BY id DESC LIMIT ${limit} OFFSET ${offset}`;
+    const videos = queryAll(sql, params);
+
+    // Format embed URLs and auto-thumbnails
+    for (const v of videos) {
+      const fmt = formatVideoEmbedUrl(v.video_url);
+      v.embed_url = fmt.embedUrl;
+      v.is_hls = fmt.isHls;
+      v.is_facebook = fmt.isFacebook;
+      v.is_direct_mp4 = fmt.isDirectMp4;
+      v.youtube_id = fmt.youtubeId;
+      if (!v.thumbnail && fmt.youtubeId) {
+        v.thumbnail = `https://img.youtube.com/vi/${fmt.youtubeId}/hqdefault.jpg`;
+      }
+    }
+
+    let editVideo = null;
+    if (action === 'edit' && id) {
+      editVideo = queryOne('SELECT * FROM videos WHERE id = ?', [id]);
+    }
+
+    res.send(renderAdminVideosView({
+      adminName: res.locals.admin_name,
+      videos,
+      search,
+      view_mode,
+      page,
+      total_pages: totalPages,
+      editVideo,
+      msg: req.query.msg || ''
+    }));
   });
 
   app.post('/admin/videos.php', (req: any, res: any) => {
-    const { title, video_url, thumbnail } = req.body;
-    runQuery('INSERT INTO videos (title, slug, video_url, thumbnail) VALUES (?, ?, ?, ?)', [title, slugify(title), video_url, thumbnail || '']);
-    res.redirect('/admin/videos.php');
+    const action = req.body.action;
+
+    if (action === 'bulk_delete') {
+      let ids: number[] = [];
+      if (Array.isArray(req.body.video_ids)) {
+        ids = req.body.video_ids.map(Number).filter(Boolean);
+      } else if (req.body.video_ids) {
+        ids = String(req.body.video_ids).split(',').map(Number).filter(Boolean);
+      }
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        runQuery(`DELETE FROM videos WHERE id IN (${placeholders})`, ids);
+      }
+      return res.redirect('/admin/videos.php?msg=bulk_deleted');
+    }
+
+    if (action === 'edit') {
+      const id = Number(req.body.video_id || 0);
+      const title = String(req.body.title || '').trim();
+      const video_url = String(req.body.video_url || '').trim();
+      let thumbnail = String(req.body.thumbnail || '').trim();
+      const description = String(req.body.description || '').trim();
+
+      const fmt = formatVideoEmbedUrl(video_url);
+      if (!thumbnail && fmt.youtubeId) {
+        thumbnail = `https://img.youtube.com/vi/${fmt.youtubeId}/hqdefault.jpg`;
+      }
+
+      if (id > 0 && title && video_url) {
+        runQuery(
+          'UPDATE videos SET title = ?, slug = ?, video_url = ?, thumbnail = ?, description = ? WHERE id = ?',
+          [title, slugify(title), video_url, thumbnail, description, id]
+        );
+      }
+      return res.redirect('/admin/videos.php?msg=updated');
+    }
+
+    const title = String(req.body.title || '').trim();
+    const video_url = String(req.body.video_url || '').trim();
+    let thumbnail = String(req.body.thumbnail || '').trim();
+    const description = String(req.body.description || '').trim();
+
+    const fmt = formatVideoEmbedUrl(video_url);
+    if (!thumbnail && fmt.youtubeId) {
+      thumbnail = `https://img.youtube.com/vi/${fmt.youtubeId}/hqdefault.jpg`;
+    }
+
+    if (title && video_url) {
+      runQuery(
+        'INSERT INTO videos (title, slug, video_url, thumbnail, description) VALUES (?, ?, ?, ?, ?)',
+        [title, slugify(title), video_url, thumbnail, description]
+      );
+    }
+    res.redirect('/admin/videos.php?msg=published');
   });
 
   // Admin Ads
@@ -679,25 +1092,90 @@ async function startServer() {
   app.get('/admin/menus.php', (req: any, res: any) => {
     const action = req.query.action;
     const id = req.query.id;
+    let msg = req.query.msg || '';
 
     if (action === 'delete' && id) {
-      runQuery('DELETE FROM menus WHERE id = ?', [Number(id)]);
-      return res.redirect('/admin/menus.php');
+      runQuery('DELETE FROM menus WHERE id = ? OR parent_id = ?', [Number(id), Number(id)]);
+      return res.redirect('/admin/menus.php?msg=' + encodeURIComponent('Menu item deleted!'));
     }
 
-    const menus = queryAll('SELECT * FROM menus ORDER BY item_order ASC');
-    res.send(renderAdminMenusView({ adminName: res.locals.admin_name, menus }));
+    if (action === 'populate_defaults') {
+      seedDefaultMenus(true);
+      return res.redirect('/admin/menus.php?msg=' + encodeURIComponent('Default menus populated successfully!'));
+    }
+
+    let editMenu = null;
+    if (action === 'edit' && id) {
+      editMenu = queryOne('SELECT * FROM menus WHERE id = ?', [Number(id)]);
+    }
+
+    const categories = getCategories(0, false);
+    const pages = queryAll('SELECT * FROM pages WHERE status = 1 ORDER BY title ASC');
+
+    const topMenus = queryAll('SELECT * FROM menus WHERE location = "top" ORDER BY item_order ASC, id ASC');
+    const headerParents = queryAll('SELECT * FROM menus WHERE location = "header" AND parent_id = 0 ORDER BY item_order ASC, id ASC');
+    const headerMenus: any[] = [];
+    for (const hp of headerParents) {
+      headerMenus.push(hp);
+      const children = queryAll('SELECT * FROM menus WHERE location = "header" AND parent_id = ? ORDER BY item_order ASC, id ASC', [hp.id]);
+      for (const ch of children) {
+        ch.is_child = true;
+        ch.parent_title = hp.title;
+        headerMenus.push(ch);
+      }
+    }
+
+    const footerMenus = queryAll('SELECT * FROM menus WHERE location = "footer" ORDER BY item_order ASC, id ASC');
+
+    res.send(renderAdminMenusView({
+      adminName: res.locals.admin_name,
+      categories,
+      pages,
+      topMenus,
+      headerParents,
+      headerMenus,
+      footerMenus,
+      editMenu,
+      msg
+    }));
   });
 
   app.post('/admin/menus.php', (req: any, res: any) => {
-    const { title, url, location, item_order } = req.body;
-    runQuery('INSERT INTO menus (location, title, url, parent_id, item_order, status) VALUES (?, ?, ?, 0, ?, 1)', [
-      location || 'header',
-      title,
-      url,
-      Number(item_order || 0)
-    ]);
-    res.redirect('/admin/menus.php');
+    const { edit_id, location, parent_id, link_type, cat_slug, page_slug, url, title, item_order, target } = req.body;
+    let finalUrl = url ? url.trim() : '';
+    let finalTitle = title ? title.trim() : '';
+
+    if (link_type === 'category' && cat_slug) {
+      finalUrl = `/category.php?slug=${cat_slug}`;
+      if (!finalTitle) {
+        const cat = getCategory(cat_slug);
+        finalTitle = cat ? cat.name : 'Category';
+      }
+    } else if (link_type === 'page' && page_slug) {
+      finalUrl = `/page.php?slug=${page_slug}`;
+      if (!finalTitle) {
+        const pg = queryOne('SELECT title FROM pages WHERE slug = ?', [page_slug]);
+        finalTitle = pg ? pg.title : 'Page';
+      }
+    }
+
+    if (!finalTitle || !finalUrl) {
+      return res.redirect('/admin/menus.php?msg=' + encodeURIComponent('Title and URL are required!'));
+    }
+
+    if (edit_id && Number(edit_id) > 0) {
+      runQuery(
+        'UPDATE menus SET location = ?, parent_id = ?, title = ?, url = ?, item_order = ?, target = ? WHERE id = ?',
+        [location || 'header', Number(parent_id || 0), finalTitle, finalUrl, Number(item_order || 0), target || '_self', Number(edit_id)]
+      );
+      return res.redirect('/admin/menus.php?msg=' + encodeURIComponent('Menu item updated!'));
+    } else {
+      runQuery(
+        'INSERT INTO menus (location, parent_id, title, url, item_order, target, status) VALUES (?, ?, ?, ?, ?, ?, 1)',
+        [location || 'header', Number(parent_id || 0), finalTitle, finalUrl, Number(item_order || 0), target || '_self']
+      );
+      return res.redirect('/admin/menus.php?msg=' + encodeURIComponent('Menu item added successfully!'));
+    }
   });
 
   // Admin Pages

@@ -136,8 +136,19 @@ $breaking_label = ($lang === 'bn') ? get_setting('breaking_news_title_bn', 'জ�
                 <i class="bi bi-moon-stars-fill text-warning" id="themeIcon"></i> <span id="themeLabel" class="d-none d-sm-inline">Dark</span>
             </button>
 
-            <a href="page.php?slug=about-us" class="me-1 d-none d-lg-inline text-white-50 small ms-2"><?= __('আমাদের সম্পর্কে', 'About Us') ?></a>
-            <a href="contact.php" class="me-1 d-none d-lg-inline text-white-50 small"><?= __('যোগাযোগ', 'Contact Us') ?></a>
+            <?php
+            $top_menus = get_menus('top');
+            if (!empty($top_menus)):
+                foreach ($top_menus as $tm):
+            ?>
+                <a href="<?= htmlspecialchars($tm['url']) ?>" target="<?= htmlspecialchars($tm['target'] ?? '_self') ?>" class="me-2 text-white-50 small d-none d-lg-inline"><?= htmlspecialchars($tm['title']) ?></a>
+            <?php 
+                endforeach;
+            else: 
+            ?>
+                <a href="page.php?slug=about-us" class="me-1 d-none d-lg-inline text-white-50 small ms-2"><?= __('আমাদের সম্পর্কে', 'About Us') ?></a>
+                <a href="contact.php" class="me-1 d-none d-lg-inline text-white-50 small"><?= __('যোগাযোগ', 'Contact Us') ?></a>
+            <?php endif; ?>
             <a href="<?= htmlspecialchars(get_setting('facebook', '#')) ?>" target="_blank" class="text-white-50"><i class="bi bi-facebook"></i></a>
             <a href="<?= htmlspecialchars(get_setting('twitter', '#')) ?>" target="_blank" class="text-white-50"><i class="bi bi-twitter-x"></i></a>
             <a href="<?= htmlspecialchars(get_setting('youtube', '#')) ?>" target="_blank" class="text-white-50"><i class="bi bi-youtube"></i></a>
