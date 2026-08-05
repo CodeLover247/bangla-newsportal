@@ -14,6 +14,18 @@ if (empty($_SESSION['admin_id'])) {
 $admin_name = $_SESSION['admin_name'] ?? 'Admin';
 $admin_role = $_SESSION['admin_role'] ?? 'admin';
 $site_name = get_setting('site_name', 'Daily Horizon');
+$favicon_url = get_setting('favicon_url', get_setting('site_favicon', get_setting('favicon', '')));
+
+$unread_messages_count = 0;
+try {
+    $db_conn = get_db_connection();
+    if ($db_conn) {
+        $cnt_stmt = $db_conn->query("SELECT COUNT(*) FROM contact_messages WHERE is_read = 0");
+        if ($cnt_stmt) {
+            $unread_messages_count = (int)$cnt_stmt->fetchColumn();
+        }
+    }
+} catch (Throwable $e) {}
 
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
@@ -23,6 +35,10 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - <?= htmlspecialchars($site_name) ?></title>
+    <?php if (!empty($favicon_url)): ?>
+        <link rel="icon" href="<?= htmlspecialchars($favicon_url) ?>">
+        <link rel="shortcut icon" href="<?= htmlspecialchars($favicon_url) ?>">
+    <?php endif; ?>
     <!-- Bootstrap 5 & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
@@ -54,35 +70,54 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="nav-item">
                 <a href="index.php" class="nav-link <?= $current_page === 'index.php' ? 'active' : '' ?>"><i class="bi bi-speedometer2"></i> Dashboard</a>
             </li>
+            <?php if (has_role_permission(['admin', 'editor'])): ?>
             <li class="nav-item">
                 <a href="homepage.php" class="nav-link <?= $current_page === 'homepage.php' ? 'active' : '' ?>"><i class="bi bi-layout-text-window-reverse"></i> Homepage Layout</a>
             </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a href="posts.php" class="nav-link <?= in_array($current_page, ['posts.php', 'post-add.php', 'post-edit.php']) ? 'active' : '' ?>"><i class="bi bi-newspaper"></i> Posts</a>
             </li>
             <li class="nav-item">
                 <a href="photocard.php" class="nav-link <?= $current_page === 'photocard.php' ? 'active' : '' ?>"><i class="bi bi-card-image"></i> Photocard Manager</a>
             </li>
+            <?php if (has_role_permission(['admin', 'editor'])): ?>
             <li class="nav-item">
                 <a href="categories.php" class="nav-link <?= $current_page === 'categories.php' ? 'active' : '' ?>"><i class="bi bi-folder2-open"></i> Categories</a>
             </li>
             <li class="nav-item">
                 <a href="pages.php" class="nav-link <?= $current_page === 'pages.php' ? 'active' : '' ?>"><i class="bi bi-file-earmark-text"></i> Custom Pages</a>
             </li>
+            <?php endif; ?>
+            <?php if (has_role_permission('admin')): ?>
             <li class="nav-item">
                 <a href="menus.php" class="nav-link <?= $current_page === 'menus.php' ? 'active' : '' ?>"><i class="bi bi-menu-button-wide"></i> Menu Builder</a>
             </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a href="media.php" class="nav-link <?= $current_page === 'media.php' ? 'active' : '' ?>"><i class="bi bi-images"></i> Media Manager</a>
             </li>
+            <?php if (has_role_permission(['admin', 'editor'])): ?>
             <li class="nav-item">
                 <a href="ads.php" class="nav-link <?= $current_page === 'ads.php' ? 'active' : '' ?>"><i class="bi bi-badge-ad"></i> Advertisements</a>
             </li>
+            <?php endif; ?>
+            <?php if (has_role_permission('admin')): ?>
             <li class="nav-item">
                 <a href="colors.php" class="nav-link <?= $current_page === 'colors.php' ? 'active' : '' ?>"><i class="bi bi-palette"></i> Color & Theme Manager</a>
             </li>
+            <?php endif; ?>
+            <?php if (has_role_permission(['admin', 'editor'])): ?>
             <li class="nav-item">
                 <a href="comments.php" class="nav-link <?= $current_page === 'comments.php' ? 'active' : '' ?>"><i class="bi bi-chat-square-dots"></i> Comments</a>
+            </li>
+            <li class="nav-item">
+                <a href="messages.php" class="nav-link <?= $current_page === 'messages.php' ? 'active' : '' ?>">
+                    <i class="bi bi-envelope-paper"></i> Contact Messages
+                    <?php if ($unread_messages_count > 0): ?>
+                        <span class="badge bg-danger ms-auto rounded-pill"><?= $unread_messages_count ?></span>
+                    <?php endif; ?>
+                </a>
             </li>
             <li class="nav-item">
                 <a href="gallery.php" class="nav-link <?= $current_page === 'gallery.php' ? 'active' : '' ?>"><i class="bi bi-camera"></i> Photo Albums</a>
@@ -90,6 +125,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="nav-item">
                 <a href="videos.php" class="nav-link <?= $current_page === 'videos.php' ? 'active' : '' ?>"><i class="bi bi-play-btn"></i> Video Manager</a>
             </li>
+            <?php endif; ?>
+            <?php if (has_role_permission('admin')): ?>
             <li class="nav-item">
                 <a href="seo.php" class="nav-link <?= $current_page === 'seo.php' ? 'active' : '' ?>"><i class="bi bi-search"></i> SEO Settings</a>
             </li>
@@ -102,6 +139,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="nav-item">
                 <a href="backup.php" class="nav-link <?= $current_page === 'backup.php' ? 'active' : '' ?>"><i class="bi bi-database-down"></i> Backup SQL</a>
             </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a href="clear-cache.php" class="nav-link text-warning"><i class="bi bi-arrow-clockwise"></i> Clear Cache</a>
             </li>

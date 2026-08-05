@@ -2,14 +2,31 @@
 require_once __DIR__ . '/includes/header.php';
 
 $message_sent = false;
+$error_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = sanitize($_POST['name'] ?? '');
-    $email = sanitize($_POST['email'] ?? '');
+    $raw_email = trim($_POST['email'] ?? '');
+    $email = filter_var($raw_email, FILTER_VALIDATE_EMAIL) ? $raw_email : '';
+    $phone = sanitize($_POST['phone'] ?? '');
     $subject = sanitize($_POST['subject'] ?? '');
     $msg = sanitize($_POST['message'] ?? '');
 
     if (!empty($name) && !empty($email) && !empty($msg)) {
-        $message_sent = true;
+        try {
+            $db = get_db_connection();
+            if ($db) {
+                if (function_exists('ensure_contact_messages_table')) {
+                    ensure_contact_messages_table($db);
+                }
+                $stmt = $db->prepare("INSERT INTO contact_messages (name, email, phone, subject, message, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)");
+                $stmt->execute([$name, $email, $phone, $subject ?: 'General Inquiry', $msg]);
+                $message_sent = true;
+            }
+        } catch (Throwable $e) {
+            $error_msg = 'Error saving your message. Please try again.';
+        }
+    } else {
+        $error_msg = 'Please fill in all required fields with a valid email address.';
     }
 }
 ?>
@@ -27,6 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
+                <?php if ($error_msg): ?>
+                    <div class="alert alert-danger p-3 mb-4">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i> <?= htmlspecialchars($error_msg) ?>
+                    </div>
+                <?php endif; ?>
+
                 <form action="contact.php" method="POST" class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Full Name *</label>
@@ -36,7 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <label class="form-label fw-bold">Email Address *</label>
                         <input type="email" name="email" class="form-control" required placeholder="john@example.com">
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Phone Number</label>
+                        <input type="text" name="phone" class="form-control" placeholder="+880 1700 000000">
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label fw-bold">Subject *</label>
                         <input type="text" name="subject" class="form-control" required placeholder="News Tip / Editorial Query">
                     </div>

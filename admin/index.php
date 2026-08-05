@@ -9,6 +9,7 @@ $total_users = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $todays_posts = $db->query("SELECT COUNT(*) FROM posts WHERE DATE(publish_date) = CURRENT_DATE AND status = 'published'")->fetchColumn();
 $total_views = $db->query("SELECT SUM(views) FROM posts")->fetchColumn() ?: 0;
 $total_comments = $db->query("SELECT COUNT(*) FROM comments")->fetchColumn();
+$pending_posts = (int)$db->query("SELECT COUNT(*) FROM posts WHERE status = 'pending'")->fetchColumn();
 
 $popular_posts = get_posts(['order_by' => 'p.views DESC', 'limit' => 5]);
 $recent_posts = get_posts(['limit' => 5]);
@@ -37,6 +38,25 @@ for ($i = 6; $i >= 0; $i--) {
     $daily_trend[$date_label] = (int)$cnt->fetchColumn();
 }
 ?>
+
+<?php if (isset($_GET['error']) && $_GET['error'] === 'unauthorized'): ?>
+    <div class="alert alert-danger alert-dismissible fade show fw-semibold mb-4">
+        <i class="bi bi-shield-exclamation me-2"></i> Access Denied: Your user role does not have permission to access that section.
+    </div>
+<?php endif; ?>
+
+<?php if ($pending_posts > 0 && has_role_permission(['admin', 'editor'])): ?>
+    <div class="alert alert-warning border-start border-warning border-4 shadow-sm d-flex align-items-center justify-content-between p-3 mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <div class="fs-3 text-warning"><i class="bi bi-clock-history"></i></div>
+            <div>
+                <h6 class="fw-bold mb-0 text-dark">Pending Article Approvals (অনুমোদনের অপেক্ষায় <?= $pending_posts ?> টি সংবাদ)</h6>
+                <small class="text-muted">রিপোর্টারদের পাঠানো <strong><?= $pending_posts ?></strong> টি পোস্ট অনুমোদনের জন্য পেন্ডিং রয়েছে। রিভিউ করে প্রকাশ করুন।</small>
+            </div>
+        </div>
+        <a href="posts.php?status=pending" class="btn btn-warning btn-sm fw-bold px-3 text-nowrap"><i class="bi bi-check2-circle me-1"></i> Review & Approve Posts &rarr;</a>
+    </div>
+<?php endif; ?>
 
 <div class="row g-4 mb-4">
     <!-- Stat 1 -->

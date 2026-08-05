@@ -5,6 +5,27 @@
 
 require_once __DIR__ . '/db.php';
 
+function has_role_permission($allowed_roles) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $role = $_SESSION['admin_role'] ?? 'reporter';
+    if ($role === 'admin' || $role === 'super_admin') {
+        return true;
+    }
+    if (is_string($allowed_roles)) {
+        $allowed_roles = [$allowed_roles];
+    }
+    return in_array($role, $allowed_roles, true);
+}
+
+function require_role_permission($allowed_roles) {
+    if (!has_role_permission($allowed_roles)) {
+        header('Location: index.php?error=unauthorized');
+        exit;
+    }
+}
+
 // Convert video URL to embed or stream metadata
 function format_video_embed_url($url) {
     if (empty($url)) return ['embedUrl' => '', 'isHls' => false, 'isDirectMp4' => false, 'isFacebook' => false, 'youtubeId' => null];
@@ -93,10 +114,15 @@ function check_install_status() {
 // Fetch setting value
 function get_setting($key, $default = '') {
     $db = get_db_connection();
-    $stmt = $db->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
-    $stmt->execute([$key]);
-    $row = $stmt->fetch();
-    return $row ? $row['setting_value'] : $default;
+    if (!$db) return $default;
+    try {
+        $stmt = $db->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
+        $stmt->execute([$key]);
+        $row = $stmt->fetch();
+        return $row ? $row['setting_value'] : $default;
+    } catch (Throwable $e) {
+        return $default;
+    }
 }
 
 // Update setting
@@ -130,8 +156,13 @@ function get_media_url($url, $fallback = 'https://images.unsplash.com/photo-1504
 
 // Generate URL slug
 function slugify($text) {
+    if (function_exists('iconv')) {
+        $trans = @iconv('utf-8', 'us-ascii//TRANSLIT', $text);
+        if ($trans !== false) {
+            $text = $trans;
+        }
+    }
     $text = preg_replace('~[^\pL\d]+~u', '-', $text);
-    $text = iconv('utf-8', 'us-ascii//TRANSLIT', $text);
     $text = preg_replace('~[^-\w]+~', '', $text);
     $text = trim($text, '-');
     $text = preg_replace('~-+~', '-', $text);
@@ -142,14 +173,19 @@ function slugify($text) {
 // Get categories
 function get_categories($parent_id = 0, $only_active = true) {
     $db = get_db_connection();
-    $sql = "SELECT * FROM categories WHERE parent_id = ?";
-    if ($only_active) {
-        $sql .= " AND status = 1";
+    if (!$db) return [];
+    try {
+        $sql = "SELECT * FROM categories WHERE parent_id = ?";
+        if ($only_active) {
+            $sql .= " AND status = 1";
+        }
+        $sql .= " ORDER BY cat_order ASC, name ASC";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([$parent_id]);
+        return $stmt->fetchAll() ?: [];
+    } catch (Throwable $e) {
+        return [];
     }
-    $sql .= " ORDER BY cat_order ASC, name ASC";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$parent_id]);
-    return $stmt->fetchAll();
 }
 
 // Get single category by ID or Slug
@@ -200,10 +236,12 @@ function get_posts($options = []) {
     $offset = isset($options['offset']) ? (int)$options['offset'] : 0;
     $category_id = isset($options['category_id']) ? (int)$options['category_id'] : 0;
     $subcategory_id = isset($options['subcategory_id']) ? (int)$options['subcategory_id'] : 0;
+    $author_id = isset($options['author_id']) ? (int)$options['author_id'] : 0;
     $is_featured = isset($options['is_featured']) ? (int)$options['is_featured'] : null;
     $is_breaking = isset($options['is_breaking']) ? (int)$options['is_breaking'] : null;
     $is_trending = isset($options['is_trending']) ? (int)$options['is_trending'] : null;
     $is_popular = isset($options['is_popular']) ? (int)$options['is_popular'] : null;
+    $flag = isset($options['flag']) ? $options['flag'] : '';
     $search = isset($options['search']) ? trim($options['search']) : '';
     $status = isset($options['status']) ? $options['status'] : 'published';
 
@@ -221,22 +259,37 @@ function get_posts($options = []) {
         $params[] = $subcategory_id;
     }
 
-    if ($is_featured !== null) {
+    if ($author_id > 0) {
+        $where[] = "p.author_id = ?";
+        $params[] = $author_id;
+    }
+
+    if ($flag === 'featured') {
+        $where[] = "p.is_featured = 1";
+    } elseif ($flag === 'breaking') {
+        $where[] = "p.is_breaking = 1";
+    } elseif ($flag === 'trending') {
+        $where[] = "p.is_trending = 1";
+    } elseif ($flag === 'popular') {
+        $where[] = "p.is_popular = 1";
+    }
+
+    if ($is_featured !== null && $flag !== 'featured') {
         $where[] = "p.is_featured = ?";
         $params[] = $is_featured;
     }
 
-    if ($is_breaking !== null) {
+    if ($is_breaking !== null && $flag !== 'breaking') {
         $where[] = "p.is_breaking = ?";
         $params[] = $is_breaking;
     }
 
-    if ($is_trending !== null) {
+    if ($is_trending !== null && $flag !== 'trending') {
         $where[] = "p.is_trending = ?";
         $params[] = $is_trending;
     }
 
-    if ($is_popular !== null) {
+    if ($is_popular !== null && $flag !== 'popular') {
         $where[] = "p.is_popular = ?";
         $params[] = $is_popular;
     }
@@ -246,9 +299,20 @@ function get_posts($options = []) {
         $params[] = trim($options['date']);
     }
 
+    if (!empty($options['date_from'])) {
+        $where[] = "DATE(p.publish_date) >= ?";
+        $params[] = trim($options['date_from']);
+    }
+
+    if (!empty($options['date_to'])) {
+        $where[] = "DATE(p.publish_date) <= ?";
+        $params[] = trim($options['date_to']);
+    }
+
     if (!empty($search)) {
-        $where[] = "(p.title LIKE ? OR p.short_description LIKE ? OR p.content LIKE ? OR p.tags LIKE ?)";
+        $where[] = "(p.title LIKE ? OR p.short_description LIKE ? OR p.content LIKE ? OR p.tags LIKE ? OR p.reporter_name LIKE ?)";
         $searchTerm = "%{$search}%";
+        $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -257,6 +321,7 @@ function get_posts($options = []) {
 
     $whereClause = implode(" AND ", $where);
     $allowedOrders = [
+        'p.id DESC, p.publish_date DESC' => 'p.id DESC, p.publish_date DESC',
         'p.publish_date DESC, p.id DESC' => 'p.publish_date DESC, p.id DESC',
         'p.publish_date ASC' => 'p.publish_date ASC',
         'p.views DESC' => 'p.views DESC',
@@ -266,8 +331,8 @@ function get_posts($options = []) {
         'p.title ASC' => 'p.title ASC',
         'p.title DESC' => 'p.title DESC'
     ];
-    $rawOrder = isset($options['order_by']) ? $options['order_by'] : 'p.publish_date DESC, p.id DESC';
-    $orderBy = isset($allowedOrders[$rawOrder]) ? $allowedOrders[$rawOrder] : 'p.publish_date DESC, p.id DESC';
+    $rawOrder = isset($options['order_by']) ? $options['order_by'] : 'p.id DESC, p.publish_date DESC';
+    $orderBy = isset($allowedOrders[$rawOrder]) ? $allowedOrders[$rawOrder] : 'p.id DESC, p.publish_date DESC';
 
     $sql = "SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar
             FROM posts p
@@ -279,7 +344,7 @@ function get_posts($options = []) {
 
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
-    $posts = $stmt->fetchAll();
+    $posts = $stmt->fetchAll() ?: [];
     $lang = get_current_lang();
     foreach ($posts as &$p) {
         $p = format_post_for_lang($p, $lang);
@@ -291,6 +356,8 @@ function get_posts($options = []) {
 function get_posts_count($options = []) {
     $db = get_db_connection();
     $category_id = isset($options['category_id']) ? (int)$options['category_id'] : 0;
+    $author_id = isset($options['author_id']) ? (int)$options['author_id'] : 0;
+    $flag = isset($options['flag']) ? $options['flag'] : '';
     $search = isset($options['search']) ? trim($options['search']) : '';
     $status = isset($options['status']) ? $options['status'] : 'published';
 
@@ -302,9 +369,35 @@ function get_posts_count($options = []) {
         $params[] = $category_id;
     }
 
+    if ($author_id > 0) {
+        $where[] = "p.author_id = ?";
+        $params[] = $author_id;
+    }
+
+    if ($flag === 'featured') {
+        $where[] = "p.is_featured = 1";
+    } elseif ($flag === 'breaking') {
+        $where[] = "p.is_breaking = 1";
+    } elseif ($flag === 'trending') {
+        $where[] = "p.is_trending = 1";
+    } elseif ($flag === 'popular') {
+        $where[] = "p.is_popular = 1";
+    }
+
+    if (!empty($options['date_from'])) {
+        $where[] = "DATE(p.publish_date) >= ?";
+        $params[] = trim($options['date_from']);
+    }
+
+    if (!empty($options['date_to'])) {
+        $where[] = "DATE(p.publish_date) <= ?";
+        $params[] = trim($options['date_to']);
+    }
+
     if (!empty($search)) {
-        $where[] = "(p.title LIKE ? OR p.title_en LIKE ? OR p.short_description LIKE ? OR p.content LIKE ?)";
+        $where[] = "(p.title LIKE ? OR p.title_en LIKE ? OR p.short_description LIKE ? OR p.content LIKE ? OR p.reporter_name LIKE ?)";
         $searchTerm = "%{$search}%";
+        $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -355,8 +448,11 @@ function increment_views($post_id) {
 }
 
 // Get breaking news ticker
-function get_breaking_news($limit = 6) {
-    return get_posts(['is_breaking' => 1, 'limit' => $limit]);
+function get_breaking_news($limit = null) {
+    if ($limit === null) {
+        $limit = (int)get_setting('breaking_news_limit', 20);
+    }
+    return get_posts(['is_breaking' => 1, 'limit' => $limit, 'order_by' => 'p.id DESC, p.publish_date DESC']);
 }
 
 // Get advertisement by position
@@ -402,16 +498,21 @@ function render_ad($position, $extra_class = '') {
 // Get navigation menus
 function get_menus($location = 'header') {
     $db = get_db_connection();
-    $stmt = $db->prepare("SELECT * FROM menus WHERE location = ? AND parent_id = 0 AND status = 1 ORDER BY item_order ASC");
-    $stmt->execute([$location]);
-    $parents = $stmt->fetchAll();
+    if (!$db) return [];
+    try {
+        $stmt = $db->prepare("SELECT * FROM menus WHERE location = ? AND parent_id = 0 AND status = 1 ORDER BY item_order ASC, id ASC");
+        $stmt->execute([$location]);
+        $parents = $stmt->fetchAll() ?: [];
 
-    foreach ($parents as &$parent) {
-        $stmtChild = $db->prepare("SELECT * FROM menus WHERE parent_id = ? AND status = 1 ORDER BY item_order ASC");
-        $stmtChild->execute([$parent['id']]);
-        $parent['children'] = $stmtChild->fetchAll();
+        foreach ($parents as &$parent) {
+            $stmtChild = $db->prepare("SELECT * FROM menus WHERE parent_id = ? AND status = 1 ORDER BY item_order ASC, id ASC");
+            $stmtChild->execute([$parent['id']]);
+            $parent['children'] = $stmtChild->fetchAll() ?: [];
+        }
+        return $parents;
+    } catch (Throwable $e) {
+        return [];
     }
-    return $parents;
 }
 
 // Time Ago Formatter
@@ -927,37 +1028,6 @@ function get_homepage_photos($limit = 8) {
         $stmt->bindValue(1, (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
-    } catch (Exception $e) {
-        return [];
-    }
-}
-
-// Menu Fetching Function for Top Bar, Header, and Footer
-function get_menus($location = 'header') {
-    $db = get_db_connection();
-    try {
-        $stmt = $db->prepare("SELECT * FROM menus WHERE location = ? AND status = 1 ORDER BY item_order ASC, id ASC");
-        $stmt->execute([$location]);
-        $items = $stmt->fetchAll();
-
-        $parents = [];
-        $childrenMap = [];
-
-        foreach ($items as $item) {
-            $parentId = (int)($item['parent_id'] ?? 0);
-            if ($parentId === 0) {
-                $parents[] = $item;
-            } else {
-                $childrenMap[$parentId][] = $item;
-            }
-        }
-
-        foreach ($parents as &$parent) {
-            $pid = (int)$parent['id'];
-            $parent['children'] = $childrenMap[$pid] ?? [];
-        }
-
-        return $parents;
     } catch (Exception $e) {
         return [];
     }

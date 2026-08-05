@@ -59,45 +59,57 @@ function get_db_connection() {
                             import_sql_file($pdo, $sql_file);
                         }
                     }
-                } catch (Exception $e) {}
+                } catch (Throwable $e) {}
 
                 ensure_custom_author_columns($pdo);
                 ensure_all_ad_positions_and_settings($pdo);
                 ensure_homepage_sections_table($pdo);
+                ensure_contact_messages_table($pdo);
                 ensure_views_and_date_columns($pdo);
                 ensure_default_menus($pdo);
                 $connected = true;
-            } catch (Exception $e) {
-                // Fallback to SQLite
+            } catch (Throwable $e) {
+                // Fallback to SQLite if enabled
                 $pdo = null;
             }
         }
 
         if (!$connected) {
-            // Default to SQLite
-            $db_file = defined('DB_SQLITE_PATH') ? DB_SQLITE_PATH : __DIR__ . '/../database.sqlite';
-            $pdo = new PDO("sqlite:" . $db_file, null, null, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]);
+            if (extension_loaded('pdo_sqlite')) {
+                // Default to SQLite
+                $db_file = defined('DB_SQLITE_PATH') ? DB_SQLITE_PATH : __DIR__ . '/../database.sqlite';
+                $pdo = new PDO("sqlite:" . $db_file, null, null, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]);
 
-            try {
-                $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
-                if (!$check || !$check->fetch()) {
+                try {
+                    $check = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+                    if (!$check || !$check->fetch()) {
+                        initialize_sqlite_db($pdo);
+                    }
+                } catch (Throwable $e) {
                     initialize_sqlite_db($pdo);
                 }
-            } catch (Exception $e) {
-                initialize_sqlite_db($pdo);
-            }
 
-            ensure_custom_author_columns($pdo);
-            ensure_all_ad_positions_and_settings($pdo);
-            ensure_homepage_sections_table($pdo);
-            ensure_database_indexes($pdo);
-            ensure_default_menus($pdo);
+                ensure_custom_author_columns($pdo);
+                ensure_all_ad_positions_and_settings($pdo);
+                ensure_homepage_sections_table($pdo);
+                ensure_contact_messages_table($pdo);
+                ensure_database_indexes($pdo);
+                ensure_default_menus($pdo);
+                $connected = true;
+            } else {
+                if (!file_exists(__DIR__ . '/../installed.lock') && basename($_SERVER['PHP_SELF'] ?? '') === 'install.php') {
+                    return null;
+                }
+            }
         }
         return $pdo;
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
+        if (!file_exists(__DIR__ . '/../installed.lock') && basename($_SERVER['PHP_SELF'] ?? '') === 'install.php') {
+            return null;
+        }
         die("<div style='font-family:sans-serif; padding:20px; background:#fef2f2; color:#991b1b; border:1px solid #f87171; border-radius:8px; margin:20px;'>
             <h3>Database Connection Failed</h3>
             <p>" . htmlspecialchars($e->getMessage()) . "</p>
@@ -854,3 +866,34 @@ function ensure_database_indexes($pdo) {
         } catch (Exception $e) {}
     }
 }
+
+function ensure_contact_messages_table($pdo) {
+    try {
+        $driver = '';
+        try { $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME); } catch (Throwable $e) {}
+        if ($driver === 'sqlite') {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                phone TEXT,
+                subject TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+        } else {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS contact_messages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                phone VARCHAR(50) DEFAULT NULL,
+                subject VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                is_read TINYINT(1) DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+    } catch (Throwable $e) {}
+}
+

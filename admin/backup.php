@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/../includes/functions.php';
+require_role_permission('admin');
 
 // Auth Guard
 if (empty($_SESSION['admin_id'])) {

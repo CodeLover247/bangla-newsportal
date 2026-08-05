@@ -77,6 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_popular = isset($_POST['is_popular']) ? 1 : 0;
     $allow_comments = isset($_POST['allow_comments']) ? 1 : 0;
     $status = $_POST['status'] ?? 'published';
+    if ($admin_role === 'reporter' && get_setting('require_post_approval', '1') === '1' && $status !== 'draft') {
+        $status = 'pending';
+    }
     $views = max(0, (int)($_POST['views'] ?? 0));
     $publish_date = !empty($_POST['publish_date']) ? date('Y-m-d H:i:s', strtotime($_POST['publish_date'])) : date('Y-m-d H:i:s');
 
@@ -97,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $author_id, $custom_author_name, $custom_author_image, $featured_image, $tags, $is_featured, $is_breaking,
                 $is_trending, $is_popular, $allow_comments, $views, $seo_title, $meta_desc, $meta_keys, $status, $publish_date
             ]);
-            $success = "Article published successfully!";
+            $success = ($status === 'pending') ? "Article submitted for approval successfully! (আপনার পোস্টটি এডমিন অনুমোদনের জন্য পেন্ডিং রাখা হয়েছে)" : "Article published successfully!";
         } catch (PDOException $e) {
             $error = "Database Error: " . $e->getMessage();
         }
@@ -273,11 +276,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="mb-3">
-                <label class="form-label fw-bold">Status</label>
+                <label class="form-label fw-bold">Status (স্ট্যাটাস)</label>
                 <select name="status" class="form-select">
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                    <option value="scheduled">Scheduled</option>
+                    <?php if ($admin_role === 'reporter' && get_setting('require_post_approval', '1') === '1'): ?>
+                        <option value="pending" selected>Pending Review (এডমিন অনুমোদনের জন্য জমা)</option>
+                        <option value="draft">Draft (ড্রাফট / খসড়া)</option>
+                    <?php else: ?>
+                        <option value="published" selected>Published (প্রকাশিত)</option>
+                        <option value="pending">Pending Review (অনুমোদনের অপেক্ষায়)</option>
+                        <option value="draft">Draft (ড্রাফট)</option>
+                        <option value="scheduled">Scheduled (তফসিল)</option>
+                    <?php endif; ?>
                 </select>
             </div>
 
@@ -302,22 +311,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="1">
-                <label class="form-check-label fw-semibold" for="is_featured">Featured Lead Story</label>
+                <label class="form-check-label fw-semibold" for="is_featured">Featured Lead Story (প্রচ্ছদ প্রধান খবর)</label>
             </div>
             <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" name="is_breaking" id="is_breaking" value="1">
-                <label class="form-check-label fw-semibold" for="is_breaking">Breaking News Ticker</label>
+                <input class="form-check-input" type="checkbox" name="is_breaking" id="is_breaking" value="1" checked>
+                <label class="form-check-label fw-semibold" for="is_breaking">Breaking News Ticker (ব্রেকিং নিউজ)</label>
             </div>
             <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" name="is_trending" id="is_trending" value="1">
-                <label class="form-check-label fw-semibold" for="is_trending">Trending Widget</label>
+                <label class="form-check-label fw-semibold" for="is_trending">Trending Widget (আলোচিত বিষয়)</label>
             </div>
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" name="allow_comments" id="allow_comments" value="1" checked>
-                <label class="form-check-label fw-semibold" for="allow_comments">Allow Comments</label>
+                <label class="form-check-label fw-semibold" for="allow_comments">Allow Comments (মন্তব্য করার অনুমতি)</label>
             </div>
 
             <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold">Publish Post</button>
+        </div>
+
+        <!-- SEO Meta Data Card -->
+        <div class="card p-4 shadow-sm border mb-4">
+            <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-search me-2 text-danger"></i> SEO Meta Data</h5>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">SEO Title</label>
+                <input type="text" name="seo_title" class="form-control" placeholder="Leave empty to use article title">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Description</label>
+                <textarea name="meta_description" class="form-control" rows="2" placeholder="Leave empty to use short description"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Keywords</label>
+                <input type="text" name="meta_keywords" class="form-control" placeholder="news, bd, cricket, election">
+            </div>
         </div>
 
         <!-- Image Upload Box -->

@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/header.php';
+require_role_permission('admin');
 
 $db = get_db_connection();
 $msg = '';
@@ -224,6 +225,48 @@ $footer_menus = $db->query("SELECT * FROM menus WHERE location = 'footer' ORDER 
         <form action="menus.php" method="POST">
             <input type="hidden" name="update_order" value="1">
             
+            <!-- Top Utility Bar Menu List -->
+            <div class="card shadow-sm border mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-link-45deg me-2"></i> Top Utility Bar Menu Links (শীর্ষ বার নেভিগেশন)</h5>
+                    <button type="submit" class="btn btn-warning btn-sm fw-bold"><i class="bi bi-arrow-down-up me-1"></i> Save Display Order</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="topMenuTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th style="width: 90px;">Order</th>
+                                <th>Menu Title</th>
+                                <th>Target URL</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topMenuSortable">
+                            <?php if (!empty($top_menus)): foreach ($top_menus as $tm): ?>
+                                <tr class="sortable-row" draggable="true" data-id="<?= $tm['id'] ?>">
+                                    <td class="text-center"><i class="bi bi-grip-vertical text-muted fs-5 cursor-grab me-1"></i></td>
+                                    <td>
+                                        <input type="number" name="orders[<?= $tm['id'] ?>]" class="form-control form-control-sm text-center fw-bold order-input" value="<?= $tm['item_order'] ?>">
+                                    </td>
+                                    <td class="fw-bold text-dark"><?= htmlspecialchars($tm['title']) ?></td>
+                                    <td><code><?= htmlspecialchars($tm['url']) ?></code></td>
+                                    <td class="text-end">
+                                        <a href="menus.php?action=edit&id=<?= $tm['id'] ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+                                        <a href="menus.php?action=delete&id=<?= $tm['id'] ?>" class="btn btn-sm btn-outline-danger btn-confirm-delete" onclick="return confirm('Delete this top menu link?')"><i class="bi bi-trash"></i> Delete</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; else: ?>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No top utility bar links added yet. Default pages will be shown.</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Header Menu List -->
             <div class="card shadow-sm border mb-4">
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3">
                     <h5 class="mb-0 fw-bold"><i class="bi bi-menu-button-wide me-2"></i> Header Navigation Menu Sequence</h5>

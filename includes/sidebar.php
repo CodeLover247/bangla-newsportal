@@ -54,6 +54,29 @@ $all_categories = get_categories(0);
         </div>
     </div>
 
+    <!-- Facebook Page Widget -->
+    <?php 
+    $fb_enabled = get_setting('fb_widget_enabled', '1');
+    if ($fb_enabled === '1'):
+        $fb_url = get_setting('fb_page_url', get_setting('social_facebook', 'https://www.facebook.com/facebook'));
+        $fb_height = (int)get_setting('fb_widget_height', '500');
+        if ($fb_height < 150) $fb_height = 500;
+        $fb_width = (int)get_setting('fb_widget_width', '0');
+        $width_param = ($fb_width > 0) ? $fb_width : 340;
+        $encoded_url = urlencode($fb_url);
+        $embed_src = "https://www.facebook.com/plugins/page.php?href={$encoded_url}&tabs=timeline&width={$width_param}&height={$fb_height}&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true";
+    ?>
+    <div class="mb-4 card border shadow-sm">
+        <div class="card-header bg-white border-bottom py-2 px-3 fw-bold text-dark d-flex align-items-center justify-content-between">
+            <span><i class="bi bi-facebook text-primary me-2 fs-5"></i> ফেসবুক পেজ</span>
+            <a href="<?= htmlspecialchars($fb_url) ?>" target="_blank" rel="noopener" class="small text-primary text-decoration-none fw-semibold">পেজে যান &rarr;</a>
+        </div>
+        <div class="card-body p-2 text-center bg-light" style="overflow: hidden;">
+            <iframe src="<?= $embed_src ?>" width="100%" height="<?= $fb_height ?>" style="border:none;overflow:hidden;max-width:100%;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- Archive Calendar Widget -->
     <div class="mb-4 card border shadow-sm">
         <div class="card-header bg-white border-bottom py-2 px-3 fw-bold text-dark d-flex align-items-center justify-content-between">

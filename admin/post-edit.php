@@ -9,7 +9,18 @@ $stmtPost->execute([$id]);
 $post = $stmtPost->fetch();
 
 if (!$post) {
-    echo "<div class='alert alert-danger'>Post not found.</div>";
+    echo "<div class='alert alert-danger m-4'>Post not found.</div>";
+    require_once __DIR__ . '/footer.php';
+    exit;
+}
+
+if ($admin_role === 'reporter' && (int)$post['author_id'] !== (int)$_SESSION['admin_id']) {
+    echo "<div class='card p-5 m-4 border-0 shadow-sm text-center'>
+            <div class='fs-1 text-danger mb-2'><i class='bi bi-shield-lock'></i></div>
+            <h4 class='fw-bold text-dark'>Permission Denied (অনুমতি নেই)</h4>
+            <p class='text-muted'>You are logged in as a Reporter. You can only view and edit posts that you authored.</p>
+            <a href='posts.php' class='btn btn-outline-danger btn-sm mx-auto' style='width: max-content;'>&larr; Return to My Posts</a>
+          </div>";
     require_once __DIR__ . '/footer.php';
     exit;
 }
@@ -82,12 +93,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_featured = isset($_POST['is_featured']) ? 1 : 0;
     $is_breaking = isset($_POST['is_breaking']) ? 1 : 0;
     $is_trending = isset($_POST['is_trending']) ? 1 : 0;
+    $is_popular = isset($_POST['is_popular']) ? 1 : 0;
+    $allow_comments = isset($_POST['allow_comments']) ? 1 : 0;
     $status = $_POST['status'] ?? 'published';
     $views = max(0, (int)($_POST['views'] ?? $post['views']));
     $publish_date = !empty($_POST['publish_date']) ? date('Y-m-d H:i:s', strtotime($_POST['publish_date'])) : ($post['publish_date'] ?? date('Y-m-d H:i:s'));
 
-    $stmtUpdate = $db->prepare("UPDATE posts SET title=?, title_en=?, slug=?, short_description=?, short_description_en=?, content=?, content_en=?, category_id=?, author_id=?, custom_author_name=?, custom_author_image=?, featured_image=?, tags=?, is_featured=?, is_breaking=?, is_trending=?, status=?, views=?, publish_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?");
-    $stmtUpdate->execute([$title, $title_en, $slug, $short_desc, $short_desc_en, $content, $content_en, $category_id, $author_id, $custom_author_name, $custom_author_image, $featured_image, $tags, $is_featured, $is_breaking, $is_trending, $status, $views, $publish_date, $id]);
+    $seo_title = trim($_POST['seo_title'] ?? '');
+    $meta_description = trim($_POST['meta_description'] ?? '');
+    $meta_keywords = trim($_POST['meta_keywords'] ?? '');
+
+    $stmtUpdate = $db->prepare("UPDATE posts SET title=?, title_en=?, slug=?, short_description=?, short_description_en=?, content=?, content_en=?, category_id=?, author_id=?, custom_author_name=?, custom_author_image=?, featured_image=?, tags=?, is_featured=?, is_breaking=?, is_trending=?, is_popular=?, allow_comments=?, seo_title=?, meta_description=?, meta_keywords=?, status=?, views=?, publish_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?");
+    $stmtUpdate->execute([$title, $title_en, $slug, $short_desc, $short_desc_en, $content, $content_en, $category_id, $author_id, $custom_author_name, $custom_author_image, $featured_image, $tags, $is_featured, $is_breaking, $is_trending, $is_popular, $allow_comments, $seo_title, $meta_description, $meta_keywords, $status, $views, $publish_date, $id]);
 
     $success = "Article updated successfully!";
     $post = $db->query("SELECT * FROM posts WHERE id = {$id}")->fetch();
@@ -242,10 +259,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </select>
             </div>
             <div class="mb-3">
-                <label class="form-label fw-bold">Status</label>
+                <label class="form-label fw-bold">Status (স্ট্যাটাস)</label>
                 <select name="status" class="form-select">
-                    <option value="published" <?= $post['status'] === 'published' ? 'selected' : '' ?>>Published</option>
-                    <option value="draft" <?= $post['status'] === 'draft' ? 'selected' : '' ?>>Draft</option>
+                    <option value="published" <?= $post['status'] === 'published' ? 'selected' : '' ?>>Published (প্রকাশিত)</option>
+                    <option value="pending" <?= $post['status'] === 'pending' ? 'selected' : '' ?>>Pending Review (অনুমোদনের অপেক্ষায়)</option>
+                    <option value="draft" <?= $post['status'] === 'draft' ? 'selected' : '' ?>>Draft (খসড়া)</option>
+                    <option value="scheduled" <?= $post['status'] === 'scheduled' ? 'selected' : '' ?>>Scheduled (তফসিল)</option>
                 </select>
             </div>
             <div class="mb-3">
@@ -262,15 +281,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="datetime-local" name="publish_date" class="form-control" value="<?= date('Y-m-d\TH:i', strtotime($post['publish_date'] ?? 'now')) ?>">
                 <div class="form-text small">Allows backdating or changing published timestamp.</div>
             </div>
+            <hr>
+
             <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="1" <?= $post['is_featured'] ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="is_featured">Featured Lead Story</label>
+                <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured" value="1" <?= !empty($post['is_featured']) ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="is_featured">Featured Lead Story (প্রচ্ছদ প্রধান খবর)</label>
             </div>
             <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" name="is_breaking" id="is_breaking" value="1" <?= $post['is_breaking'] ? 'checked' : '' ?>>
-                <label class="form-check-label fw-semibold" for="is_breaking">Breaking Ticker</label>
+                <input class="form-check-input" type="checkbox" name="is_breaking" id="is_breaking" value="1" <?= !empty($post['is_breaking']) ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="is_breaking">Breaking News Ticker (ব্রেকিং নিউজ)</label>
             </div>
-            <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-3">Update Post</button>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="is_trending" id="is_trending" value="1" <?= !empty($post['is_trending']) ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="is_trending">Trending Widget (আলোচিত বিষয়)</label>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="allow_comments" id="allow_comments" value="1" <?= (!isset($post['allow_comments']) || $post['allow_comments'] == 1) ? 'checked' : '' ?>>
+                <label class="form-check-label fw-semibold" for="allow_comments">Allow Comments (মন্তব্য করার অনুমতি)</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">Update Post</button>
+        </div>
+
+        <!-- SEO Meta Data Card -->
+        <div class="card p-4 shadow-sm border mb-4">
+            <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-search me-2 text-primary"></i> SEO Meta Data</h5>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">SEO Title</label>
+                <input type="text" name="seo_title" class="form-control" value="<?= htmlspecialchars($post['seo_title'] ?? '') ?>" placeholder="Article Title for Google">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Description</label>
+                <textarea name="meta_description" class="form-control" rows="2" placeholder="Brief summary for search engines"><?= htmlspecialchars($post['meta_description'] ?? '') ?></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Keywords</label>
+                <input type="text" name="meta_keywords" class="form-control" value="<?= htmlspecialchars($post['meta_keywords'] ?? '') ?>" placeholder="news, bd, cricket, election">
+            </div>
+        </div>
         </div>
 
         <div class="card p-4 shadow-sm border">

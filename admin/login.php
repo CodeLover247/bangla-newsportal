@@ -10,6 +10,10 @@ if (!empty($_SESSION['admin_id'])) {
 }
 
 $error = '';
+$site_name = get_setting('site_name', 'Daily Horizon');
+$logo_url = get_setting('logo_url', '');
+$favicon_url = get_setting('favicon_url', get_setting('site_favicon', get_setting('favicon', '')));
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
@@ -40,7 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Login - Newspaper CMS</title>
+    <title>Admin Login - <?= htmlspecialchars($site_name) ?></title>
+    <?php if (!empty($favicon_url)): ?>
+        <link rel="icon" href="<?= htmlspecialchars($favicon_url) ?>">
+        <link rel="shortcut icon" href="<?= htmlspecialchars($favicon_url) ?>">
+    <?php endif; ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-dark d-flex align-items-center min-vh-100">
@@ -48,7 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="container" style="max-width: 420px;">
     <div class="card border-0 shadow-lg rounded-3">
         <div class="card-header bg-danger text-white text-center p-4 rounded-top-3">
-            <h4 class="fw-bold mb-0">DAILY HORIZON</h4>
+            <?php if (!empty($logo_url)): ?>
+                <div class="mb-2">
+                    <img src="<?= htmlspecialchars($logo_url) ?>" alt="<?= htmlspecialchars($site_name) ?>" style="max-height: 55px; max-width: 100%; object-fit: contain;">
+                </div>
+            <?php endif; ?>
+            <h4 class="fw-bold mb-0"><?= htmlspecialchars($site_name) ?></h4>
             <small class="opacity-75">Admin Panel Authentication</small>
         </div>
         <div class="card-body p-4 p-md-5">

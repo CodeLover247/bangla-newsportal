@@ -281,6 +281,12 @@ function toggleTheme() {
 
 document.addEventListener('DOMContentLoaded', updateThemeUI);
 </script>
+<?php
+$footer_custom_code = get_setting('footer_custom_code', get_setting('custom_footer_code', ''));
+if (!empty($footer_custom_code)) {
+    echo $footer_custom_code;
+}
+?>
 </body>
 </html>
 

@@ -234,6 +234,17 @@ function runSchemaAndSeeds() {
       section_order INTEGER DEFAULT 0,
       status INTEGER DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS contact_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   try { sqlDb.run("ALTER TABLE posts ADD COLUMN title_en TEXT;"); } catch (_) {}
@@ -664,7 +675,7 @@ export function getPosts(options: any = {}, lang?: string): any[] {
   }
 
   const whereClause = where.join(' AND ');
-  const orderBy = options.order_by || 'p.publish_date DESC, p.id DESC';
+  const orderBy = options.order_by || 'p.id DESC, p.publish_date DESC';
 
   const sql = `
     SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar
@@ -747,8 +758,9 @@ export function incrementViews(postId: number): void {
   runQuery('UPDATE posts SET views = views + 1 WHERE id = ?', [postId]);
 }
 
-export function getBreakingNews(limit = 6): any[] {
-  return getPosts({ is_breaking: 1, limit });
+export function getBreakingNews(limit?: number): any[] {
+  const maxLimit = limit || parseInt(getSetting('breaking_news_limit', '20'), 10) || 20;
+  return getPosts({ is_breaking: 1, limit: maxLimit, order_by: 'p.id DESC, p.publish_date DESC' });
 }
 
 export function getAd(position: string): any | null {

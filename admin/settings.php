@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/header.php';
+require_role_permission('admin');
 
 $msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -8,14 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'header_layout_preset', 'mobile_header_preset', 'mobile_show_nav_logo', 'footer_layout_preset', 'homepage_layout_preset',
         'footer_logo_url', 'footer_logo_position', 'footer_logo_height', 'footer_logo_width',
         'header_layout_type', 'header_ad_position', 'header_ad_height', 'enable_drop_cap', 'enable_translation', 'default_language',
-        'home_show_breaking', 'breaking_news_title_bn', 'breaking_news_title_en',
+        'home_show_breaking', 'breaking_news_limit', 'breaking_news_title_bn', 'breaking_news_title_en', 'require_post_approval',
         'editor_name', 'publisher_name', 'chief_editor', 'address', 'phone', 'mobile', 'email',
         'office_time', 'social_facebook', 'social_twitter', 'social_youtube', 'google_map',
+        'fb_widget_enabled', 'fb_page_url', 'fb_widget_height', 'fb_widget_width',
         'footer_copyright', 'footer_text',
         'share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin',
         'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print'
     ];
-    $share_keys = ['share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin', 'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print', 'enable_drop_cap', 'enable_translation', 'home_show_breaking'];
+    $share_keys = ['share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin', 'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print', 'enable_drop_cap', 'enable_translation', 'home_show_breaking', 'fb_widget_enabled', 'require_post_approval'];
     foreach ($fields as $f) {
         if (in_array($f, $share_keys)) {
             $val = isset($_POST[$f]) ? '1' : '0';
@@ -284,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card p-4 shadow-sm border mb-4 bg-white border-start border-4 border-danger">
         <h5 class="fw-bold text-danger border-bottom pb-2 mb-3"><i class="bi bi-lightning-charge-fill me-2"></i> Breaking News Ticker Settings (জরুরি খবর সেকশন সেটিংস)</h5>
         <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="form-check form-switch card p-3 bg-light border h-100">
                     <input class="form-check-input" type="checkbox" name="home_show_breaking" id="home_show_breaking" value="1" <?= get_setting('home_show_breaking', '1') === '1' ? 'checked' : '' ?>>
                     <label class="form-check-label fw-bold" for="home_show_breaking">
@@ -294,16 +296,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <div class="col-md-4">
-                <label class="form-label fw-bold"><i class="bi bi-pencil-square me-1 text-danger"></i> Bangla Ticker Title Label (বাংলা লেবেল)</label>
-                <input type="text" name="breaking_news_title_bn" class="form-control border-danger fw-semibold" value="<?= htmlspecialchars(get_setting('breaking_news_title_bn', 'জরুরি খবর')) ?>" placeholder="e.g. জরুরি খবর, সর্বশেষ খবর, শিরোনাম">
-                <small class="text-muted">বাংলা ওয়েবসাইট সংস্করণে টিকারে যে লেখাটি দেখাবে (ডিফল্ট: জরুরি খবর)</small>
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="bi bi-list-ol me-1 text-danger"></i> Breaking News Post Limit (আইটেম সংখ্যা)</label>
+                <input type="number" name="breaking_news_limit" class="form-control border-danger fw-semibold" value="<?= htmlspecialchars(get_setting('breaking_news_limit', '20')) ?>" min="1" max="100" placeholder="20">
+                <small class="text-muted">সর্বোচ্চ কতটি সাম্প্রতিক ব্রেকিং পোস্ট স্ক্রোল করবে (ডিফল্ট: ২০টি)</small>
             </div>
 
-            <div class="col-md-4">
-                <label class="form-label fw-bold"><i class="bi bi-pencil-square me-1 text-danger"></i> English Ticker Title Label (ইংলিশ লেবেল)</label>
-                <input type="text" name="breaking_news_title_en" class="form-control border-danger fw-semibold" value="<?= htmlspecialchars(get_setting('breaking_news_title_en', 'BREAKING NEWS')) ?>" placeholder="e.g. BREAKING NEWS, FLASH NEWS">
-                <small class="text-muted">ইংলিশ ওয়েবসাইট সংস্করণে টিকারে যে লেখাটি দেখাবে (ডিফল্ট: BREAKING NEWS)</small>
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="bi bi-pencil-square me-1 text-danger"></i> Bangla Label (বাংলা লেবেল)</label>
+                <input type="text" name="breaking_news_title_bn" class="form-control border-danger fw-semibold" value="<?= htmlspecialchars(get_setting('breaking_news_title_bn', 'জরুরি খবর')) ?>" placeholder="e.g. জরুরি খবর, সর্বশেষ খবর">
+                <small class="text-muted">বাংলা ওয়েবসাইট সংস্করণের টিকারে লেবেল</small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-bold"><i class="bi bi-pencil-square me-1 text-danger"></i> English Label (ইংলিশ লেবেল)</label>
+                <input type="text" name="breaking_news_title_en" class="form-control border-danger fw-semibold" value="<?= htmlspecialchars(get_setting('breaking_news_title_en', 'BREAKING NEWS')) ?>" placeholder="e.g. BREAKING NEWS">
+                <small class="text-muted">ইংলিশ ওয়েবসাইট সংস্করণের টিকারে লেবেল</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Post Approval & Workflow Settings Card -->
+    <div class="card p-4 shadow-sm border mb-4 bg-white border-start border-4 border-warning">
+        <h5 class="fw-bold text-warning-emphasis border-bottom pb-2 mb-3"><i class="bi bi-shield-check me-2"></i> Post Approval & Reporter Workflow (পোস্ট অনুমোদন সেটিংস)</h5>
+        <div class="row g-3">
+            <div class="col-md-12">
+                <div class="form-check form-switch card p-3 bg-light border">
+                    <input class="form-check-input" type="checkbox" name="require_post_approval" id="require_post_approval" value="1" <?= get_setting('require_post_approval', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-bold" for="require_post_approval">
+                        Require Admin/Editor Approval for Reporter Posts (রিপোর্টারদের পোস্ট এডমিন দ্বারা অনুমোদিত হওয়া বাধ্যতামূলক)
+                    </label>
+                    <small class="text-muted d-block mt-1">চালু থাকলে রিপোর্টার/সাংবাদিকদের প্রকাশিত পোস্ট সরাসরি সাইটে দেখাবে না, পেন্ডিং স্ট্যাটাসে থাকবে। এডমিন বা এডিটর এপ্রুভ করলে তবেই তা প্রকাশিত হবে।</small>
+                </div>
             </div>
         </div>
     </div>
@@ -367,7 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="row g-3">
             <div class="col-md-4">
                 <label class="form-label fw-semibold">Facebook Page URL</label>
-                <input type="text" name="social_facebook" class="form-control" value="<?= htmlspecialchars(get_setting('social_facebook')) ?>">
+                <input type="text" name="social_facebook" class="form-control" value="<?= htmlspecialchars(get_setting('social_facebook', 'https://www.facebook.com/facebook')) ?>" placeholder="https://www.facebook.com/yourpage">
             </div>
 
             <div class="col-md-4">
@@ -388,6 +412,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="col-12">
                 <label class="form-label fw-semibold">Footer Copyright Line</label>
                 <input type="text" name="footer_copyright" class="form-control" value="<?= htmlspecialchars(get_setting('footer_copyright')) ?>">
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3.5: Facebook Page Sidebar Widget Configuration -->
+    <div class="card p-4 shadow-sm border mb-4 bg-white border-start border-4 border-primary">
+        <h5 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="bi bi-facebook me-2"></i> Right Sidebar Facebook Page Widget (ফেসবুক পেজ উইজেট)</h5>
+        
+        <div class="row g-3">
+            <div class="col-md-12">
+                <div class="form-check form-switch card p-3 bg-light border">
+                    <input class="form-check-input" type="checkbox" name="fb_widget_enabled" id="fb_widget_enabled" value="1" <?= get_setting('fb_widget_enabled', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-bold" for="fb_widget_enabled">
+                        <i class="bi bi-facebook text-primary me-1"></i> Display Facebook Page Widget on Right Sidebar
+                    </label>
+                    <small class="text-muted d-block mt-1">ওয়েবসাইটের ডানপাশের সাইডবারে ফেসবুক পেজ বক্স/উইজেট প্রদর্শন করতে টিকেল মার্ক রাখুন।</small>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Facebook Page Link URL *</label>
+                <?php $fb_link = get_setting('fb_page_url', get_setting('social_facebook', 'https://www.facebook.com/facebook')); ?>
+                <input type="text" name="fb_page_url" class="form-control border-primary" value="<?= htmlspecialchars($fb_link) ?>" placeholder="https://www.facebook.com/yourpage">
+                <small class="text-muted">আপনার অফিসিয়াল ফেসবুক পেজের সম্পূর্ণ লিংক দিন।</small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Widget Height (Pixels)</label>
+                <input type="number" name="fb_widget_height" class="form-control" value="<?= htmlspecialchars(get_setting('fb_widget_height', '500')) ?>" placeholder="500" min="150" max="1000">
+                <small class="text-muted">উচ্চতা (কম/বেশি করতে পারেন, যেমন: 350, 500, 700)</small>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Widget Width (Pixels)</label>
+                <input type="number" name="fb_widget_width" class="form-control" value="<?= htmlspecialchars(get_setting('fb_widget_width', '0')) ?>" placeholder="0 (Responsive Auto)" min="0" max="600">
+                <small class="text-muted">0 দিলে সাইডবারের প্রস্থ অনুযায়ী অটো ফিট হবে।</small>
             </div>
         </div>
     </div>

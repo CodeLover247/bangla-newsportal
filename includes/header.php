@@ -6,10 +6,12 @@ $lang = get_current_lang();
 $site_name = get_setting('site_name', 'Daily Horizon');
 $site_title = get_setting('site_title', 'Daily Horizon - Truth First, Always Ahead');
 $meta_desc = get_setting('meta_description', '');
+$favicon_url = get_setting('favicon_url', get_setting('site_favicon', get_setting('favicon', '')));
 $categories = get_categories(0);
 $custom_header_menus = get_menus('header');
 $show_breaking = get_setting('home_show_breaking', '1');
-$breaking_news = ($show_breaking === '1') ? get_breaking_news(6) : [];
+$breaking_limit = (int)get_setting('breaking_news_limit', 20);
+$breaking_news = ($show_breaking === '1') ? get_breaking_news($breaking_limit) : [];
 $breaking_label = ($lang === 'bn') ? get_setting('breaking_news_title_bn', 'জরুরি খবর') : get_setting('breaking_news_title_en', 'BREAKING');
 ?>
 <!DOCTYPE html>
@@ -19,6 +21,10 @@ $breaking_label = ($lang === 'bn') ? get_setting('breaking_news_title_bn', 'জ�
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($site_title) ?></title>
     <meta name="description" content="<?= htmlspecialchars($meta_desc) ?>">
+    <?php if (!empty($favicon_url)): ?>
+        <link rel="icon" href="<?= htmlspecialchars($favicon_url) ?>">
+        <link rel="shortcut icon" href="<?= htmlspecialchars($favicon_url) ?>">
+    <?php endif; ?>
     <!-- Bootstrap 5 CSS & Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
@@ -103,6 +109,44 @@ $breaking_label = ($lang === 'bn') ? get_setting('breaking_news_title_bn', 'জ�
             }
         })();
     </script>
+    <?php
+    $google_verification = get_setting('google_verification', '');
+    $bing_verification = get_setting('bing_verification', '');
+    $google_analytics = get_setting('google_analytics', '');
+    $facebook_pixel = get_setting('facebook_pixel', '');
+    $header_custom_code = get_setting('header_custom_code', get_setting('custom_head_code', ''));
+    ?>
+    <?php if (!empty($google_verification)): ?>
+        <meta name="google-site-verification" content="<?= htmlspecialchars($google_verification) ?>">
+    <?php endif; ?>
+    <?php if (!empty($bing_verification)): ?>
+        <meta name="msvalidate.01" content="<?= htmlspecialchars($bing_verification) ?>">
+    <?php endif; ?>
+    <?php if (!empty($google_analytics)): ?>
+        <!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=<?= htmlspecialchars($google_analytics) ?>"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', '<?= htmlspecialchars($google_analytics) ?>');
+        </script>
+    <?php endif; ?>
+    <?php if (!empty($facebook_pixel)): ?>
+        <!-- Facebook Pixel Code -->
+        <script>
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+        document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '<?= htmlspecialchars($facebook_pixel) ?>');
+        fbq('track', 'PageView');
+        </script>
+    <?php endif; ?>
+    <?php if (!empty($header_custom_code)): ?>
+        <?= $header_custom_code ?>
+    <?php endif; ?>
 </head>
 <body>
 

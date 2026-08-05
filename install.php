@@ -3,7 +3,13 @@
  * Interactive 3-Step GUI Installer for Newspaper Portal CMS
  * Supports MySQL / MariaDB (cPanel phpMyAdmin) and SQLite
  */
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
+error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+ini_set('display_errors', '1');
+
 require_once __DIR__ . '/includes/functions.php';
 
 if (is_installed()) {
@@ -104,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             header("Location: install.php?step=2");
             exit;
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $error = "Database Connection Failed: " . $e->getMessage();
         }
     } elseif ($step === 2) {
@@ -211,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 @file_put_contents(__DIR__ . '/installed.lock', 'Installed on ' . date('Y-m-d H:i:s'));
 
                 $success = "Installation & Database Auto-Import Completed Successfully!";
-            } catch (Exception $e) {
+            } catch (Throwable $e) {
                 $error = "Database Setup Error: " . $e->getMessage();
             }
         }

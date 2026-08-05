@@ -43,7 +43,7 @@ export function renderPublicHeader(locals: any, title = ''): string {
   const fullDateStr = locals.full_date_str || getFullBanglaDateString(new Date());
 
   const categories = locals.categories || getCategories(0, true);
-  const breakingNews = locals.breaking_news || getBreakingNews(6);
+  const breakingNews = locals.breaking_news || getBreakingNews();
   const customTopMenus = locals.custom_top_menus || getMenus('top');
   const customHeaderMenus = locals.custom_header_menus || getMenus('header');
 
@@ -155,6 +155,7 @@ export function renderPublicHeader(locals: any, title = ''): string {
   const footerHeading = getSetting('footer_heading_color', '#ffffff');
   const footerLink = getSetting('footer_link_color', '#cbd5e1');
   const customCss = getSetting('custom_css', '');
+  const headerCustomCode = getSetting('header_custom_code', getSetting('custom_head_code', ''));
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -163,6 +164,7 @@ export function renderPublicHeader(locals: any, title = ''): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${pageTitle}</title>
     <meta name="description" content="${metaDesc}">
+    ${headerCustomCode ? headerCustomCode : ''}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/assets/css/style.css">
@@ -343,6 +345,8 @@ export function renderPublicFooter(locals: any): string {
     contactHtml += `<p class="mb-1"><i class="bi bi-envelope-fill text-danger me-2"></i> ${escapeHtml(email)}</p>`;
   }
 
+  const footerCustomCode = getSetting('footer_custom_code', getSetting('custom_footer_code', ''));
+
   return `
     ${renderAd('footer_top', 'container my-4 no-print')}
 
@@ -397,6 +401,7 @@ export function renderPublicFooter(locals: any): string {
         if (savedTheme === 'dark') document.body.classList.add('dark-mode');
         updateThemeIcon(savedTheme);
     </script>
+    ${footerCustomCode ? footerCustomCode : ''}
 </body>
 </html>`;
 }
@@ -527,9 +532,31 @@ export function renderPublicSidebar(locals: any): string {
     </div>`;
   }
 
-  const fbUrl = getSetting('facebook', 'https://facebook.com');
-  const twUrl = getSetting('twitter', 'https://twitter.com');
-  const ytUrl = getSetting('youtube', 'https://youtube.com');
+  const fbUrl = getSetting('fb_page_url', getSetting('social_facebook', getSetting('facebook', 'https://www.facebook.com/facebook')));
+  const twUrl = getSetting('social_twitter', getSetting('twitter', 'https://twitter.com'));
+  const ytUrl = getSetting('social_youtube', getSetting('youtube', 'https://youtube.com'));
+
+  const fbEnabled = (getSetting('fb_widget_enabled', '1') || '1') === '1';
+  const fbHeight = parseInt(getSetting('fb_widget_height', '500')) || 500;
+  const fbWidth = parseInt(getSetting('fb_widget_width', '0')) || 0;
+  const widthParam = fbWidth > 0 ? fbWidth : 340;
+  const encodedFbUrl = encodeURIComponent(fbUrl);
+  const fbEmbedSrc = `https://www.facebook.com/plugins/page.php?href=${encodedFbUrl}&tabs=timeline&width=${widthParam}&height=${fbHeight}&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true`;
+
+  let fbWidgetHtml = '';
+  if (fbEnabled) {
+    fbWidgetHtml = `
+      <div class="sidebar-widget mb-4 card border shadow-sm">
+          <div class="card-header bg-white border-bottom py-2 px-3 fw-bold text-dark d-flex align-items-center justify-content-between">
+              <span><i class="bi bi-facebook text-primary me-2 fs-5"></i> ${lang === 'bn' ? 'ফেসবুক পেজ' : 'Facebook Page'}</span>
+              <a href="${escapeHtml(fbUrl)}" target="_blank" rel="noopener" class="small text-primary text-decoration-none fw-semibold">${lang === 'bn' ? 'পেজে যান &rarr;' : 'Visit Page &rarr;'}</a>
+          </div>
+          <div class="card-body p-2 text-center bg-light" style="overflow: hidden;">
+              <iframe src="${fbEmbedSrc}" width="100%" height="${fbHeight}" style="border:none;overflow:hidden;max-width:100%;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
+          </div>
+      </div>
+    `;
+  }
 
   return `
     <div class="sticky-top" style="top: 80px; z-index: 10;">
@@ -574,6 +601,8 @@ export function renderPublicSidebar(locals: any): string {
                 </div>
             </div>
         </div>
+
+        ${fbWidgetHtml}
 
         <!-- Archive Calendar Widget -->
         <div class="sidebar-widget mb-4 card border shadow-sm">
@@ -1170,13 +1199,49 @@ export function renderGalleryView(locals: any): string {
 
   let albumsHtml = '';
   albums.forEach((alb: any) => {
+    const photos = alb.photos || [];
+    const coverImg = escapeHtml(alb.cover_image || (photos[0] ? photos[0].photo_url : 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80'));
+
     albumsHtml += `<div class="col-md-6 col-lg-4 mb-4">
-      <div class="card h-100 border shadow-sm">
-        <img src="${escapeHtml(alb.cover_image || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80')}" class="card-img-top object-fit-cover" style="height: 220px;" alt="">
-        <div class="card-body">
-          <h5 class="card-title fw-bold text-dark">${escapeHtml(alb.title)}</h5>
-          <p class="card-text small text-muted">${escapeHtml(alb.description || '')}</p>
-          <span class="badge bg-danger"><i class="bi bi-camera-fill me-1"></i> ${alb.photos ? alb.photos.length : 0} ${lang === 'bn' ? 'টি ছবি' : 'Photos'}</span>
+      <div class="card h-100 border-0 shadow-sm rounded-3 overflow-hidden">
+        <div class="position-relative overflow-hidden" style="height: 220px; cursor: pointer;" onclick="openAlbumModal(${alb.id})">
+          <img src="${coverImg}" class="w-100 h-100 object-fit-cover" alt="${escapeHtml(alb.title)}">
+          <div class="position-absolute top-0 end-0 m-2">
+            <span class="badge bg-danger"><i class="bi bi-camera-fill me-1"></i> ${photos.length} ${lang === 'bn' ? 'ছবি' : 'Photos'}</span>
+          </div>
+        </div>
+        <div class="card-body p-3 d-flex flex-column justify-content-between">
+          <div>
+            <h5 class="card-title font-serif fw-bold text-dark mb-2">${escapeHtml(alb.title)}</h5>
+            <p class="card-text small text-muted line-clamp-2">${escapeHtml(alb.description || '')}</p>
+          </div>
+          <div class="mt-3 pt-2 border-top d-flex justify-content-between align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 fw-bold" onclick="openAlbumModal(${alb.id})">
+              <i class="bi bi-arrows-fullscreen me-1"></i> ${lang === 'bn' ? 'জুম / গ্যালারি' : 'Zoom / View'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Album Modal -->
+      <div class="modal fade" id="albumModal${alb.id}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+          <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+              <h5 class="modal-title font-serif fw-bold"><i class="bi bi-images text-danger me-2"></i> ${escapeHtml(alb.title)}</h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+              <div class="mb-3 position-relative bg-black rounded p-3" style="min-height: 350px;">
+                <img src="${coverImg}" id="mainPhotoDisplay${alb.id}" class="img-fluid rounded transition-transform" style="max-height: 480px; object-fit: contain; transform: scale(1);" alt="">
+                <div class="mt-3 bg-dark p-2 rounded-pill d-inline-flex gap-2 border border-secondary shadow">
+                  <button type="button" class="btn btn-sm btn-outline-light rounded-circle" onclick="zoomImage('mainPhotoDisplay${alb.id}', 0.25)"><i class="bi bi-zoom-in"></i></button>
+                  <button type="button" class="btn btn-sm btn-outline-light rounded-circle" onclick="zoomImage('mainPhotoDisplay${alb.id}', -0.25)"><i class="bi bi-zoom-out"></i></button>
+                  <button type="button" class="btn btn-sm btn-outline-light rounded-circle" onclick="resetZoom('mainPhotoDisplay${alb.id}')"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1191,6 +1256,29 @@ export function renderGalleryView(locals: any): string {
         ${albumsHtml || `<div class="col-12 text-center py-5 text-muted">${lang === 'bn' ? 'কোনো ফটো অ্যালবাম যুক্ত করা হয়নি।' : 'No photo albums available.'}</div>`}
       </div>
     </main>
+    <script>
+    let currentScaleMap = {};
+    function openAlbumModal(albumId) {
+      const modalEl = document.getElementById('albumModal' + albumId);
+      if (modalEl) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+      }
+    }
+    function zoomImage(imgId, delta) {
+      const img = document.getElementById(imgId);
+      if (!img) return;
+      if (!currentScaleMap[imgId]) currentScaleMap[imgId] = 1;
+      currentScaleMap[imgId] = Math.max(0.5, Math.min(3.5, currentScaleMap[imgId] + delta));
+      img.style.transform = 'scale(' + currentScaleMap[imgId] + ')';
+    }
+    function resetZoom(imgId) {
+      const img = document.getElementById(imgId);
+      if (!img) return;
+      currentScaleMap[imgId] = 1;
+      img.style.transform = 'scale(1)';
+    }
+    </script>
     ${footerHtml}`;
 }
 
@@ -1202,14 +1290,15 @@ export function renderVideoView(locals: any): string {
 
   let vidsHtml = '';
   videos.forEach((v: any) => {
+    const embedUrl = formatVideoEmbedUrl(v.embed_url || v.video_url || '');
     vidsHtml += `<div class="col-md-6 col-lg-4 mb-4">
-      <div class="card h-100 border shadow-sm overflow-hidden">
-        <div class="ratio ratio-16x9">
-          <iframe src="${escapeHtml(v.embed_url)}" title="${escapeHtml(v.title)}" allowfullscreen></iframe>
+      <div class="card h-100 border-0 shadow-sm rounded-3 overflow-hidden">
+        <div class="ratio ratio-16x9 bg-black">
+          <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(v.title)}" allowfullscreen loading="lazy"></iframe>
         </div>
-        <div class="card-body">
-          <h6 class="fw-bold text-dark mb-1">${escapeHtml(v.title)}</h6>
-          <p class="small text-muted m-0">${escapeHtml(v.description || '')}</p>
+        <div class="card-body p-3">
+          <h6 class="fw-bold font-serif text-dark mb-1">${escapeHtml(v.title)}</h6>
+          <p class="small text-muted m-0 line-clamp-2">${escapeHtml(v.description || '')}</p>
         </div>
       </div>
     </div>`;

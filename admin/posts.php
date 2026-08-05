@@ -3,9 +3,29 @@ require_once __DIR__ . '/header.php';
 
 $db = get_db_connection();
 
+// Approve Pending Post Action
+if (isset($_GET['action']) && $_GET['action'] === 'approve' && isset($_GET['id'])) {
+    if (has_role_permission(['admin', 'editor'])) {
+        $app_id = (int)$_GET['id'];
+        $stmtApp = $db->prepare("UPDATE posts SET status = 'published', publish_date = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmtApp->execute([$app_id]);
+        header('Location: posts.php?status=pending&msg=approved');
+        exit;
+    }
+}
+
 // Delete Single Action
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
     $del_id = (int)$_GET['id'];
+    if ($admin_role === 'reporter') {
+        $chk = $db->prepare("SELECT author_id FROM posts WHERE id = ?");
+        $chk->execute([$del_id]);
+        $row = $chk->fetch();
+        if ($row && (int)$row['author_id'] !== (int)$_SESSION['admin_id']) {
+            header('Location: posts.php?error=unauthorized');
+            exit;
+        }
+    }
     $stmtDel = $db->prepare("DELETE FROM posts WHERE id = ?");
     $stmtDel->execute([$del_id]);
     header('Location: posts.php?msg=deleted');
@@ -70,33 +90,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_action']) && !em
 $status = isset($_GET['status']) ? $_GET['status'] : 'published';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $category_id = isset($_GET['category_id']) ? (int)$_GET['category_id'] : 0;
+$author_id = isset($_GET['author_id']) ? (int)$_GET['author_id'] : 0;
+$flag = isset($_GET['flag']) ? trim($_GET['flag']) : '';
+$date_from = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
+$date_to = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
+$order_by = isset($_GET['order_by']) ? trim($_GET['order_by']) : 'p.publish_date DESC, p.id DESC';
+
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $limit = 10;
 $offset = ($page - 1) * $limit;
 
 $categories = get_categories();
+$users = $db->query("SELECT id, full_name, username FROM users ORDER BY full_name ASC")->fetchAll() ?: [];
 
 $options = [
     'status' => $status,
     'search' => $search,
     'category_id' => $category_id,
+    'author_id' => $author_id,
+    'flag' => $flag,
+    'date_from' => $date_from,
+    'date_to' => $date_to,
+    'order_by' => $order_by,
     'limit' => $limit,
     'offset' => $offset
 ];
 
+$pending_count = 0;
+try {
+    $pending_count = (int)$db->query("SELECT COUNT(*) FROM posts WHERE status = 'pending'")->fetchColumn();
+} catch (Throwable $e) {}
+
 $posts = get_posts($options);
-$total_posts = get_posts_count(['status' => $status, 'search' => $search, 'category_id' => $category_id]);
-$total_pages = ceil($total_posts / $limit);
+$total_posts = get_posts_count(['status' => $status, 'search' => $search, 'category_id' => $category_id, 'author_id' => $author_id, 'flag' => $flag, 'date_from' => $date_from, 'date_to' => $date_to]);
+$total_pages = max(1, ceil($total_posts / $limit));
 ?>
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
-        <h3 class="fw-bold mb-1">Post Management</h3>
-        <p class="text-muted small mb-0">Total <?= number_format($total_posts) ?> posts found</p>
+        <h3 class="fw-bold mb-1"><i class="bi bi-newspaper text-danger me-2"></i>Post Management</h3>
+        <p class="text-muted small mb-0">Total <?= number_format($total_posts) ?> posts found matching filter criteria</p>
     </div>
     <a href="post-add.php" class="btn btn-danger fw-bold"><i class="bi bi-plus-lg me-1"></i> Add New Post</a>
 </div>
 
+<?php if (isset($_GET['msg']) && $_GET['msg'] === 'approved'): ?>
+    <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle-fill me-2"></i> Post approved and published successfully!</div>
+<?php endif; ?>
 <?php if (isset($_GET['msg']) && $_GET['msg'] === 'deleted'): ?>
     <div class="alert alert-success alert-dismissible fade show">Post deleted successfully.</div>
 <?php endif; ?>
@@ -107,41 +147,110 @@ $total_pages = ceil($total_posts / $limit);
     <div class="alert alert-success alert-dismissible fade show">Selected articles deleted successfully.</div>
 <?php endif; ?>
 
-<!-- Status Filter Tabs & Search Bar -->
+<!-- Status Tabs & Advanced Search / Filter Bar -->
 <div class="card border-0 shadow-sm p-3 mb-4">
-    <div class="row g-3 align-items-center">
-        <div class="col-md-5">
-            <ul class="nav nav-pills">
-                <li class="nav-item">
-                    <a class="nav-link <?= $status === 'published' ? 'active bg-danger' : '' ?>" href="posts.php?status=published&search=<?= urlencode($search) ?>&category_id=<?= $category_id ?>">Published</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?= $status === 'draft' ? 'active bg-danger' : '' ?>" href="posts.php?status=draft&search=<?= urlencode($search) ?>&category_id=<?= $category_id ?>">Drafts</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link <?= $status === 'scheduled' ? 'active bg-danger' : '' ?>" href="posts.php?status=scheduled&search=<?= urlencode($search) ?>&category_id=<?= $category_id ?>">Scheduled</a>
-                </li>
-            </ul>
-        </div>
-        <div class="col-md-7">
-            <form method="GET" action="posts.php" class="d-flex gap-2">
-                <input type="hidden" name="status" value="<?= htmlspecialchars($status) ?>">
-                <select name="category_id" class="form-select form-select-sm" style="max-width: 180px;">
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link <?= $status === 'published' ? 'active bg-danger' : '' ?>" href="posts.php?status=published">Published</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $status === 'pending' ? 'active bg-warning text-dark fw-bold' : '' ?>" href="posts.php?status=pending">
+                    Pending Approval (অনুমোদনের অপেক্ষায়)
+                    <?php if ($pending_count > 0): ?>
+                        <span class="badge bg-danger rounded-pill ms-1"><?= $pending_count ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $status === 'draft' ? 'active bg-danger' : '' ?>" href="posts.php?status=draft">Drafts</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $status === 'scheduled' ? 'active bg-danger' : '' ?>" href="posts.php?status=scheduled">Scheduled</a>
+            </li>
+        </ul>
+        <span class="badge bg-light text-dark border"><i class="bi bi-funnel-fill text-danger me-1"></i> Advanced Filter Panel</span>
+    </div>
+
+    <!-- Advanced Filter Form -->
+    <form method="GET" action="posts.php">
+        <input type="hidden" name="status" value="<?= htmlspecialchars($status) ?>">
+        
+        <div class="row g-2 mb-2">
+            <!-- Keyword / Search Input -->
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-search me-1"></i> Search Title / Tags / Reporter</label>
+                <input type="text" name="search" class="form-control form-control-sm" placeholder="খবরের শিরোনাম বা কিওয়ার্ড টাইপ করুন..." value="<?= htmlspecialchars($search) ?>">
+            </div>
+
+            <!-- Category Filter -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-folder me-1"></i> Category</label>
+                <select name="category_id" class="form-select form-select-sm">
                     <option value="0">All Categories</option>
                     <?php foreach ($categories as $cat): ?>
                         <option value="<?= $cat['id'] ?>" <?= $category_id == $cat['id'] ? 'selected' : '' ?>><?= htmlspecialchars($cat['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <div class="input-group input-group-sm">
-                    <input type="text" name="search" class="form-control" placeholder="Search title or tags..." value="<?= htmlspecialchars($search) ?>">
-                    <button class="btn btn-danger" type="submit"><i class="bi bi-search"></i> Filter</button>
-                    <?php if (!empty($search) || $category_id > 0): ?>
-                        <a href="posts.php?status=<?= urlencode($status) ?>" class="btn btn-outline-secondary"><i class="bi bi-x-circle"></i> Reset</a>
-                    <?php endif; ?>
-                </div>
-            </form>
+            </div>
+
+            <!-- Author / User Filter -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-person me-1"></i> Author / Reporter</label>
+                <select name="author_id" class="form-select form-select-sm">
+                    <option value="0">All Authors</option>
+                    <?php foreach ($users as $u): ?>
+                        <option value="<?= $u['id'] ?>" <?= $author_id == $u['id'] ? 'selected' : '' ?>><?= htmlspecialchars($u['full_name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Flag Filter -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-star me-1"></i> Special Badge</label>
+                <select name="flag" class="form-select form-select-sm">
+                    <option value="">All Types</option>
+                    <option value="featured" <?= $flag === 'featured' ? 'selected' : '' ?>>Featured (নির্বাচিত)</option>
+                    <option value="breaking" <?= $flag === 'breaking' ? 'selected' : '' ?>>Breaking (জরুরি)</option>
+                    <option value="trending" <?= $flag === 'trending' ? 'selected' : '' ?>>Trending</option>
+                    <option value="popular" <?= $flag === 'popular' ? 'selected' : '' ?>>Popular</option>
+                </select>
+            </div>
         </div>
-    </div>
+
+        <div class="row g-2 align-items-end">
+            <!-- Date From -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-event me-1"></i> From Date</label>
+                <input type="date" name="date_from" class="form-control form-control-sm" value="<?= htmlspecialchars($date_from) ?>">
+            </div>
+
+            <!-- Date To -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-calendar-check me-1"></i> To Date</label>
+                <input type="date" name="date_to" class="form-control form-control-sm" value="<?= htmlspecialchars($date_to) ?>">
+            </div>
+
+            <!-- Sort By -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"><i class="bi bi-sort-down me-1"></i> Sort By</label>
+                <select name="order_by" class="form-select form-select-sm">
+                    <option value="p.publish_date DESC, p.id DESC" <?= $order_by === 'p.publish_date DESC, p.id DESC' ? 'selected' : '' ?>>Newest First (সর্বশেষ)</option>
+                    <option value="p.publish_date ASC" <?= $order_by === 'p.publish_date ASC' ? 'selected' : '' ?>>Oldest First (পুরাতন)</option>
+                    <option value="p.views DESC" <?= $order_by === 'p.views DESC' ? 'selected' : '' ?>>Most Viewed (জনপ্রিয়)</option>
+                    <option value="p.title ASC" <?= $order_by === 'p.title ASC' ? 'selected' : '' ?>>Title A-Z</option>
+                </select>
+            </div>
+
+            <!-- Actions -->
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-danger btn-sm w-100 fw-bold" type="submit"><i class="bi bi-filter me-1"></i> Apply Filter</button>
+                <?php if (!empty($search) || $category_id > 0 || $author_id > 0 || !empty($flag) || !empty($date_from) || !empty($date_to)): ?>
+                    <a href="posts.php?status=<?= urlencode($status) ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </form>
 </div>
 
 <form method="POST" action="posts.php" id="bulkPostsForm">
@@ -205,16 +314,26 @@ $total_pages = ceil($total_posts / $limit);
                             <td><span class="badge bg-secondary"><?= htmlspecialchars($p['category_name']) ?></span></td>
                             <td><?= htmlspecialchars($p['author_name']) ?></td>
                             <td>
+                                <?php if ($p['status'] === 'pending'): ?>
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i> Pending</span>
+                                <?php elseif ($p['status'] === 'draft'): ?>
+                                    <span class="badge bg-secondary">Draft</span>
+                                <?php endif; ?>
                                 <?php if ($p['is_featured']): ?><span class="badge bg-danger">Featured</span><?php endif; ?>
                                 <?php if ($p['is_breaking']): ?><span class="badge bg-warning text-dark">Breaking</span><?php endif; ?>
                                 <?php if ($p['is_trending']): ?><span class="badge bg-info text-dark">Trending</span><?php endif; ?>
                             </td>
                             <td><span class="badge bg-light text-dark border"><i class="bi bi-eye me-1"></i><?= number_format($p['views']) ?></span></td>
                             <td><small><?= date('M j, Y', strtotime($p['publish_date'])) ?></small></td>
-                            <td class="text-end">
+                            <td class="text-end text-nowrap">
+                                <?php if ($p['status'] === 'pending' && has_role_permission(['admin', 'editor'])): ?>
+                                    <a href="posts.php?action=approve&id=<?= $p['id'] ?>" class="btn btn-sm btn-success fw-bold me-1" onclick="return confirm('Approve and publish this post?');"><i class="bi bi-check-circle me-1"></i> Approve</a>
+                                <?php endif; ?>
                                 <a href="photocard.php?post_id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-danger me-1" title="Generate Photocard"><i class="bi bi-card-image me-1"></i> Photocard</a>
-                                <a href="post-edit.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Edit"><i class="bi bi-pencil"></i></a>
-                                <a href="posts.php?action=delete&id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-danger btn-confirm-delete" onclick="return confirm('Are you sure you want to delete this post?');" title="Delete"><i class="bi bi-trash"></i></a>
+                                <?php if ($admin_role !== 'reporter' || (int)$p['author_id'] === (int)$_SESSION['admin_id']): ?>
+                                    <a href="post-edit.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Edit"><i class="bi bi-pencil"></i></a>
+                                    <a href="posts.php?action=delete&id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-danger btn-confirm-delete" onclick="return confirm('Are you sure you want to delete this post?');" title="Delete"><i class="bi bi-trash"></i></a>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; else: ?>

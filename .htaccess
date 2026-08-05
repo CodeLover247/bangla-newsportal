@@ -7,10 +7,6 @@ DirectoryIndex index.php index.html
     RewriteEngine On
 </IfModule>
 
-<IfModule mod_autoindex.c>
-    Options -Indexes
-</IfModule>
-
 AddDefaultCharset UTF-8
 
 

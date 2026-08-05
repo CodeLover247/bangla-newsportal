@@ -92,27 +92,32 @@ if ($action === 'toggle_section_status' && $_SERVER['REQUEST_METHOD'] === 'POST'
 if ($action === 'search_photocard_posts') {
     $q = isset($_GET['q']) ? trim($_GET['q']) : '';
     $db = get_db_connection();
-    if (empty($q)) {
-        $stmt = $db->query("SELECT p.id, p.title, p.publish_date, p.featured_image, p.reporter_name, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.status = 'published' ORDER BY p.id DESC LIMIT 8");
-        $posts = $stmt->fetchAll();
-    } else {
-        $stmt = $db->prepare("SELECT p.id, p.title, p.publish_date, p.featured_image, p.reporter_name, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.status = 'published' AND (p.title LIKE ? OR p.tags LIKE ?) ORDER BY p.id DESC LIMIT 12");
-        $term = '%' . $q . '%';
-        $stmt->execute([$term, $term]);
-        $posts = $stmt->fetchAll();
+    try {
+        if (empty($q)) {
+            $stmt = $db->query("SELECT p.*, c.name as category_name, u.full_name as author_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN users u ON p.author_id = u.id WHERE p.status = 'published' ORDER BY p.id DESC LIMIT 8");
+            $posts = $stmt->fetchAll() ?: [];
+        } else {
+            $stmt = $db->prepare("SELECT p.*, c.name as category_name, u.full_name as author_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id LEFT JOIN users u ON p.author_id = u.id WHERE p.status = 'published' AND (p.title LIKE ? OR p.short_description LIKE ? OR p.tags LIKE ?) ORDER BY p.id DESC LIMIT 12");
+            $term = '%' . $q . '%';
+            $stmt->execute([$term, $term, $term]);
+            $posts = $stmt->fetchAll() ?: [];
+        }
+        $results = [];
+        foreach ($posts as $p) {
+            $reporter = !empty($p['reporter_name']) ? $p['reporter_name'] : (!empty($p['author_name']) ? $p['author_name'] : 'নিজস্ব প্রতিবেদক');
+            $results[] = [
+                'id' => $p['id'],
+                'title' => $p['title'],
+                'category_name' => $p['category_name'] ?? 'খবর',
+                'publish_date' => !empty($p['publish_date']) ? date('d F, Y', strtotime($p['publish_date'])) : date('d F, Y'),
+                'reporter_name' => $reporter,
+                'featured_image' => !empty($p['featured_image']) ? get_media_url($p['featured_image']) : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
+            ];
+        }
+        echo json_encode(['status' => 'success', 'results' => $results]);
+    } catch (Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
     }
-    $results = [];
-    foreach ($posts as $p) {
-        $results[] = [
-            'id' => $p['id'],
-            'title' => $p['title'],
-            'category_name' => $p['category_name'] ?? 'খবর',
-            'publish_date' => !empty($p['publish_date']) ? date('d F, Y', strtotime($p['publish_date'])) : date('d F, Y'),
-            'reporter_name' => !empty($p['reporter_name']) ? $p['reporter_name'] : 'নিজস্ব প্রতিবেদক',
-            'featured_image' => !empty($p['featured_image']) ? get_media_url($p['featured_image']) : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80'
-        ];
-    }
-    echo json_encode(['status' => 'success', 'results' => $results]);
     exit;
 }
 
