@@ -65,10 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($slug)) {
-        $slug = slugify(!empty($title_en) ? $title_en : $title);
-        if (empty($slug)) {
-            $slug = 'post-' . time();
-        }
+        $slug = get_unique_slug('posts', !empty($title_en) ? $title_en : $title);
+    } else {
+        $slug = get_unique_slug('posts', $slug);
     }
 
     $is_featured = isset($_POST['is_featured']) ? 1 : 0;
@@ -327,23 +326,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <button type="submit" class="btn btn-danger btn-lg w-100 fw-bold">Publish Post</button>
-        </div>
-
-        <!-- SEO Meta Data Card -->
-        <div class="card p-4 shadow-sm border mb-4">
-            <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-search me-2 text-danger"></i> SEO Meta Data</h5>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">SEO Title</label>
-                <input type="text" name="seo_title" class="form-control" placeholder="Leave empty to use article title">
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Meta Description</label>
-                <textarea name="meta_description" class="form-control" rows="2" placeholder="Leave empty to use short description"></textarea>
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Meta Keywords</label>
-                <input type="text" name="meta_keywords" class="form-control" placeholder="news, bd, cricket, election">
-            </div>
         </div>
 
         <!-- Image Upload Box -->

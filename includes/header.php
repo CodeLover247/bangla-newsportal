@@ -3,10 +3,25 @@ require_once __DIR__ . '/functions.php';
 check_install_status();
 
 $lang = get_current_lang();
-$site_name = get_setting('site_name', 'Daily Horizon');
-$site_title = get_setting('site_title', 'Daily Horizon - Truth First, Always Ahead');
-$meta_desc = get_setting('meta_description', '');
+$site_name = get_setting('site_name', 'Babuganjlive.com');
+$site_title_default = get_setting('site_title', $site_name . ' - মানুষের কথা, মানুষের পাশে');
+$meta_desc_default = get_setting('meta_description', '');
+$meta_keywords_default = get_setting('meta_keywords', '');
 $favicon_url = get_setting('favicon_url', get_setting('site_favicon', get_setting('favicon', '')));
+$site_logo_default = get_setting('site_logo', get_setting('logo_url', ''));
+
+// Dynamic Page Meta Values
+$current_page_title = !empty($page_title) ? $page_title : $site_title_default;
+$current_page_desc = !empty($page_desc) ? $page_desc : $meta_desc_default;
+$current_page_keywords = !empty($page_keywords) ? $page_keywords : $meta_keywords_default;
+
+// Open Graph image (MUST be full absolute URL for Facebook & WhatsApp)
+$raw_og_img = !empty($page_image) ? $page_image : ($site_logo_default ?: 'assets/images/logo.png');
+$current_og_image = get_full_url($raw_og_img);
+
+$current_og_type = !empty($og_type) ? $og_type : 'website';
+$current_og_url = !empty($og_url) ? $og_url : get_full_url($_SERVER['REQUEST_URI'] ?? '');
+
 $categories = get_categories(0);
 $custom_header_menus = get_menus('header');
 $show_breaking = get_setting('home_show_breaking', '1');
@@ -19,8 +34,28 @@ $breaking_label = ($lang === 'bn') ? get_setting('breaking_news_title_bn', 'জ�
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($site_title) ?></title>
-    <meta name="description" content="<?= htmlspecialchars($meta_desc) ?>">
+    <title><?= htmlspecialchars($current_page_title) ?></title>
+    <meta name="description" content="<?= htmlspecialchars($current_page_desc) ?>">
+    <?php if (!empty($current_page_keywords)): ?>
+        <meta name="keywords" content="<?= htmlspecialchars($current_page_keywords) ?>">
+    <?php endif; ?>
+    <link rel="canonical" href="<?= htmlspecialchars($current_og_url) ?>">
+
+    <!-- Open Graph / Facebook Meta Tags -->
+    <meta property="og:site_name" content="<?= htmlspecialchars($site_name) ?>">
+    <meta property="og:type" content="<?= htmlspecialchars($current_og_type) ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($current_page_title) ?>">
+    <meta property="og:description" content="<?= htmlspecialchars($current_page_desc) ?>">
+    <meta property="og:image" content="<?= htmlspecialchars($current_og_image) ?>">
+    <meta property="og:image:secure_url" content="<?= htmlspecialchars($current_og_image) ?>">
+    <meta property="og:url" content="<?= htmlspecialchars($current_og_url) ?>">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="<?= htmlspecialchars($current_page_title) ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($current_page_desc) ?>">
+    <meta name="twitter:image" content="<?= htmlspecialchars($current_og_image) ?>">
+
     <?php if (!empty($favicon_url)): ?>
         <link rel="icon" href="<?= htmlspecialchars($favicon_url) ?>">
         <link rel="shortcut icon" href="<?= htmlspecialchars($favicon_url) ?>">

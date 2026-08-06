@@ -60,10 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (empty($slug)) {
-        $slug = slugify(!empty($title_en) ? $title_en : $title);
-        if (empty($slug)) {
-            $slug = 'post-' . $id;
-        }
+        $slug = get_unique_slug('posts', !empty($title_en) ? $title_en : $title, $id);
+    } else {
+        $slug = get_unique_slug('posts', $slug, $id);
     }
 
     $category_id = (int)($_POST['category_id'] ?? 0);
@@ -214,6 +213,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="text" id="post-slug" name="slug" class="form-control" value="<?= htmlspecialchars($post['slug'] ?? '') ?>">
             </div>
         </div>
+
+        <!-- SEO Box -->
+        <div class="card p-4 shadow-sm border">
+            <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-search text-primary me-2"></i> SEO Metadata</h5>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">SEO Title</label>
+                <input type="text" name="seo_title" class="form-control" value="<?= htmlspecialchars($post['seo_title'] ?? '') ?>" placeholder="Article Title for Google">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Description</label>
+                <textarea name="meta_description" class="form-control" rows="2" placeholder="Brief summary for search engines"><?= htmlspecialchars($post['meta_description'] ?? '') ?></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Meta Keywords</label>
+                <input type="text" name="meta_keywords" class="form-control" value="<?= htmlspecialchars($post['meta_keywords'] ?? '') ?>" placeholder="news, bd, cricket, election">
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-4">
@@ -301,24 +317,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <button type="submit" class="btn btn-primary btn-lg w-100 fw-bold mt-2">Update Post</button>
-        </div>
-
-        <!-- SEO Meta Data Card -->
-        <div class="card p-4 shadow-sm border mb-4">
-            <h5 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-search me-2 text-primary"></i> SEO Meta Data</h5>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">SEO Title</label>
-                <input type="text" name="seo_title" class="form-control" value="<?= htmlspecialchars($post['seo_title'] ?? '') ?>" placeholder="Article Title for Google">
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Meta Description</label>
-                <textarea name="meta_description" class="form-control" rows="2" placeholder="Brief summary for search engines"><?= htmlspecialchars($post['meta_description'] ?? '') ?></textarea>
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Meta Keywords</label>
-                <input type="text" name="meta_keywords" class="form-control" value="<?= htmlspecialchars($post['meta_keywords'] ?? '') ?>" placeholder="news, bd, cricket, election">
-            </div>
-        </div>
         </div>
 
         <div class="card p-4 shadow-sm border">

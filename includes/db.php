@@ -66,7 +66,9 @@ function get_db_connection() {
                 ensure_homepage_sections_table($pdo);
                 ensure_contact_messages_table($pdo);
                 ensure_views_and_date_columns($pdo);
+                ensure_gallery_tables($pdo);
                 ensure_default_menus($pdo);
+                ensure_system_update_and_migrations($pdo);
                 $connected = true;
             } catch (Throwable $e) {
                 // Fallback to SQLite if enabled
@@ -97,17 +99,19 @@ function get_db_connection() {
                 ensure_homepage_sections_table($pdo);
                 ensure_contact_messages_table($pdo);
                 ensure_database_indexes($pdo);
+                ensure_gallery_tables($pdo);
                 ensure_default_menus($pdo);
+                ensure_system_update_and_migrations($pdo);
                 $connected = true;
             } else {
-                if (!file_exists(__DIR__ . '/../installed.lock') && basename($_SERVER['PHP_SELF'] ?? '') === 'install.php') {
+                if (!file_exists(__DIR__ . '/../installed.lock') || strpos($_SERVER['SCRIPT_NAME'] ?? '', 'install.php') !== false || strpos($_SERVER['PHP_SELF'] ?? '', 'install.php') !== false) {
                     return null;
                 }
             }
         }
         return $pdo;
     } catch (Throwable $e) {
-        if (!file_exists(__DIR__ . '/../installed.lock') && basename($_SERVER['PHP_SELF'] ?? '') === 'install.php') {
+        if (!file_exists(__DIR__ . '/../installed.lock') || strpos($_SERVER['SCRIPT_NAME'] ?? '', 'install.php') !== false || strpos($_SERVER['PHP_SELF'] ?? '', 'install.php') !== false) {
             return null;
         }
         die("<div style='font-family:sans-serif; padding:20px; background:#fef2f2; color:#991b1b; border:1px solid #f87171; border-radius:8px; margin:20px;'>
@@ -895,5 +899,158 @@ function ensure_contact_messages_table($pdo) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         }
     } catch (Throwable $e) {}
+}
+
+function ensure_gallery_tables($pdo) {
+    try {
+        $driver = '';
+        try { $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME); } catch (Throwable $e) {}
+        if ($driver === 'sqlite') {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS gallery_albums (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                slug TEXT UNIQUE NOT NULL,
+                cover_image TEXT,
+                description TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS gallery_photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                album_id INTEGER NOT NULL,
+                photo_path TEXT NOT NULL,
+                caption TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+        } else {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS gallery_albums (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              title VARCHAR(200) NOT NULL,
+              slug VARCHAR(200) NOT NULL UNIQUE,
+              cover_image VARCHAR(255) DEFAULT NULL,
+              description TEXT DEFAULT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS gallery_photos (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              album_id INT NOT NULL,
+              photo_path VARCHAR(255) NOT NULL,
+              caption VARCHAR(255) DEFAULT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+
+        $cnt = (int)$pdo->query("SELECT COUNT(*) FROM gallery_albums")->fetchColumn();
+        if ($cnt === 0) {
+            $pdo->exec("INSERT INTO gallery_albums (id, title, slug, cover_image, description) VALUES 
+                (1, 'জাতীয় সংস্কৃতি ও স্থান আলোকচিত্র সঙ্কলন', 'national-cultural-and-heritage-gallery', 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80', 'বিশেষ প্রতিনিধি ও ফটোসাংবাদিকদের তোলা বিভিন্ন সচিত্র প্রতিবেদন ও চিত্রমালা।')");
+            $pdo->exec("INSERT INTO gallery_photos (id, album_id, photo_path, caption) VALUES
+                (1, 1, 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&auto=format&fit=crop&q=80', 'উদ্বোধনী সাংস্কৃতিক পরিবেশনা ও বিশেষ আলোকচিত্র'),
+                (2, 1, 'https://images.unsplash.com/photo-1469488865564-c2de10f69f96?w=800&auto=format&fit=crop&q=80', 'ঐতিহ্যবাহী লোকশিল্প প্রদর্শনী স্টল'),
+                (3, 1, 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800&auto=format&fit=crop&q=80', 'আন্তর্জাতিক মেগা ভেন্যু প্রাঙ্গণে দর্শক মেলা')");
+        }
+    } catch (Throwable $e) {}
+}
+
+function ensure_system_update_and_migrations($pdo) {
+    $logs = [];
+    try {
+        $driver = '';
+        try { $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME); } catch (Throwable $e) {}
+
+        // Helper function to check if column exists
+        $hasColumn = function($table, $column) use ($pdo, $driver) {
+            try {
+                if ($driver === 'sqlite') {
+                    $stmt = $pdo->query("PRAGMA table_info(`{$table}`)");
+                    $cols = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    foreach ($cols as $c) {
+                        if (strcasecmp($c['name'], $column) === 0) return true;
+                    }
+                    return false;
+                } else {
+                    $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE ?");
+                    $stmt->execute([$column]);
+                    return $stmt->rowCount() > 0;
+                }
+            } catch (Throwable $e) {
+                return false;
+            }
+        };
+
+        // Helper function to safely add a column
+        $addColumn = function($table, $column, $definition) use ($pdo, $hasColumn, &$logs) {
+            if (!$hasColumn($table, $column)) {
+                try {
+                    $pdo->exec("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+                    $logs[] = "Column `{$column}` added to `{$table}`.";
+                } catch (Throwable $e) {
+                    $logs[] = "Note: Could not add `{$column}` to `{$table}` (" . $e->getMessage() . ").";
+                }
+            }
+        };
+
+        // 1. Ensure required tables exist
+        ensure_contact_messages_table($pdo);
+        ensure_gallery_tables($pdo);
+        ensure_homepage_sections_table($pdo);
+        ensure_database_indexes($pdo);
+
+        // 2. Ensure Post Table Columns
+        $addColumn('posts', 'custom_author_name', 'VARCHAR(255) DEFAULT NULL');
+        $addColumn('posts', 'custom_author_title', 'VARCHAR(255) DEFAULT NULL');
+        $addColumn('posts', 'custom_author_avatar', 'VARCHAR(255) DEFAULT NULL');
+        $addColumn('posts', 'title_en', 'TEXT DEFAULT NULL');
+        $addColumn('posts', 'content_en', 'TEXT DEFAULT NULL');
+        $addColumn('posts', 'short_description_en', 'TEXT DEFAULT NULL');
+        $addColumn('posts', 'allow_comments', 'INT DEFAULT 1');
+        $addColumn('posts', 'views', 'INT DEFAULT 0');
+        $addColumn('posts', 'status', 'VARCHAR(50) DEFAULT "published"');
+
+        // 3. Ensure User Table Columns
+        $addColumn('users', 'bio', 'TEXT DEFAULT NULL');
+        $addColumn('users', 'avatar', 'VARCHAR(255) DEFAULT NULL');
+        $addColumn('users', 'role', 'VARCHAR(50) DEFAULT "user"');
+
+        // 4. Ensure Comment Table Columns
+        $addColumn('comments', 'status', 'VARCHAR(50) DEFAULT "pending"');
+
+        // 5. Ensure Default System Settings exist in Settings table
+        $default_settings = [
+            'site_name' => 'দৈনিক দিগন্ত',
+            'site_tagline' => 'সত্যের সন্ধানে অবিরত • দৈনিক খবর',
+            'header_layout_preset' => 'standard',
+            'mobile_header_preset' => 'standard',
+            'footer_layout_preset' => 'standard',
+            'homepage_layout_preset' => 'classic_newspaper',
+            'enable_comments' => '1',
+            'enable_translation' => '1',
+            'default_language' => 'en',
+            'home_show_breaking' => '1',
+            'breaking_news_limit' => '20',
+            'require_post_approval' => '1',
+            'fb_widget_enabled' => '1',
+            'share_facebook' => '1',
+            'share_twitter' => '1',
+            'share_whatsapp' => '1'
+        ];
+
+        if ($driver === 'sqlite') {
+            $stmtSet = $pdo->prepare("INSERT OR IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)");
+        } else {
+            $stmtSet = $pdo->prepare("INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)");
+        }
+
+        foreach ($default_settings as $sk => $sv) {
+            try {
+                $stmtSet->execute([$sk, $sv]);
+            } catch (Throwable $e) {}
+        }
+
+        $logs[] = "Database schema, indexes, and settings checked successfully.";
+
+    } catch (Throwable $e) {
+        $logs[] = "Update error: " . $e->getMessage();
+    }
+    return $logs;
 }
 

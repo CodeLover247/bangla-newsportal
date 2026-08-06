@@ -31,7 +31,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $title = trim($_POST['title'] ?? '');
-    $slug = slugify(trim($_POST['slug'] ?? $title));
+    $raw_slug = trim($_POST['slug'] ?? '');
+    $edit_id = (int)($_POST['edit_id'] ?? 0);
+    $slug = get_unique_slug('pages', !empty($raw_slug) ? $raw_slug : $title, $edit_id);
     $content = $_POST['content'] ?? '';
     $views = max(0, (int)($_POST['views'] ?? 0));
     $created_at = !empty($_POST['created_at']) ? date('Y-m-d H:i:s', strtotime($_POST['created_at'])) : date('Y-m-d H:i:s');

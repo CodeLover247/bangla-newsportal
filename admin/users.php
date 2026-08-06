@@ -106,10 +106,17 @@ if ($action === 'view' && $user_id > 0) {
     $pending_user_posts = (int)($user_stats['pending_count'] ?? 0);
     $draft_user_posts = (int)($user_stats['draft_count'] ?? 0);
 
-    // Fetch posts created by this user
-    $upStmt = $db->prepare("SELECT p.*, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.author_id = ? ORDER BY p.id DESC LIMIT 50");
+    // Fetch posts created by this user with pagination
+    $post_page = max(1, (int)($_GET['post_page'] ?? 1));
+    $post_limit = 10;
+    $post_offset = ($post_page - 1) * $post_limit;
+
+    $user_posts_total = $total_user_posts;
+    $total_post_pages = max(1, ceil($user_posts_total / $post_limit));
+
+    $upStmt = $db->prepare("SELECT p.*, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.author_id = ? ORDER BY p.id DESC LIMIT {$post_limit} OFFSET {$post_offset}");
     $upStmt->execute([$user_id]);
-    $user_posts = $upStmt->fetchAll();
+    $user_posts = $upStmt->fetchAll() ?: [];
     ?>
 
     <div class="mb-4 d-flex align-items-center justify-content-between">
@@ -282,6 +289,26 @@ if ($action === 'view' && $user_id > 0) {
                         </tbody>
                     </table>
                 </div>
+                <?php if (isset($total_post_pages) && $total_post_pages > 1): ?>
+                    <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center border-top">
+                        <small class="text-muted">Showing Page <?= $post_page ?> of <?= $total_post_pages ?> (Total <?= $user_posts_total ?> posts)</small>
+                        <nav aria-label="User Posts Pagination">
+                            <ul class="pagination pagination-sm mb-0">
+                                <li class="page-item <?= $post_page <= 1 ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="users.php?action=view&id=<?= $user_id ?>&post_page=<?= $post_page - 1 ?>">&laquo; Prev</a>
+                                </li>
+                                <?php for ($p = 1; $p <= $total_post_pages; $p++): ?>
+                                    <li class="page-item <?= $p == $post_page ? 'active' : '' ?>">
+                                        <a class="page-link" href="users.php?action=view&id=<?= $user_id ?>&post_page=<?= $p ?>"><?= $p ?></a>
+                                    </li>
+                                <?php endfor; ?>
+                                <li class="page-item <?= $post_page >= $total_post_pages ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="users.php?action=view&id=<?= $user_id ?>&post_page=<?= $post_page + 1 ?>">Next &raquo;</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

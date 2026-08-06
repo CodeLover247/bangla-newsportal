@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'header_layout_preset', 'mobile_header_preset', 'mobile_show_nav_logo', 'footer_layout_preset', 'homepage_layout_preset',
         'footer_logo_url', 'footer_logo_position', 'footer_logo_height', 'footer_logo_width',
         'header_layout_type', 'header_ad_position', 'header_ad_height', 'enable_drop_cap', 'enable_translation', 'default_language',
-        'home_show_breaking', 'breaking_news_limit', 'breaking_news_title_bn', 'breaking_news_title_en', 'require_post_approval',
+        'home_show_breaking', 'breaking_news_limit', 'breaking_news_title_bn', 'breaking_news_title_en', 'require_post_approval', 'enable_comments', 'show_update_menu_sidebar', 'system_version',
         'editor_name', 'publisher_name', 'chief_editor', 'address', 'phone', 'mobile', 'email',
         'office_time', 'social_facebook', 'social_twitter', 'social_youtube', 'google_map',
         'fb_widget_enabled', 'fb_page_url', 'fb_widget_height', 'fb_widget_width',
@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin',
         'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print'
     ];
-    $share_keys = ['share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin', 'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print', 'enable_drop_cap', 'enable_translation', 'home_show_breaking', 'fb_widget_enabled', 'require_post_approval'];
+    $share_keys = ['share_facebook', 'share_twitter', 'share_whatsapp', 'share_linkedin', 'share_telegram', 'share_pinterest', 'share_email', 'share_copy', 'share_print', 'enable_drop_cap', 'enable_translation', 'home_show_breaking', 'fb_widget_enabled', 'require_post_approval', 'enable_comments', 'show_update_menu_sidebar'];
     foreach ($fields as $f) {
         if (in_array($f, $share_keys)) {
             $val = isset($_POST[$f]) ? '1' : '0';
@@ -327,6 +327,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         Require Admin/Editor Approval for Reporter Posts (রিপোর্টারদের পোস্ট এডমিন দ্বারা অনুমোদিত হওয়া বাধ্যতামূলক)
                     </label>
                     <small class="text-muted d-block mt-1">চালু থাকলে রিপোর্টার/সাংবাদিকদের প্রকাশিত পোস্ট সরাসরি সাইটে দেখাবে না, পেন্ডিং স্ট্যাটাসে থাকবে। এডমিন বা এডিটর এপ্রুভ করলে তবেই তা প্রকাশিত হবে।</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Comments Settings Card -->
+    <div class="card p-4 shadow-sm border mb-4 bg-white border-start border-4 border-success">
+        <h5 class="fw-bold text-success border-bottom pb-2 mb-3"><i class="bi bi-chat-dots-fill me-2"></i> Reader Comments Control (গ্লোবাল কমেন্ট সেকশন অন/অফ)</h5>
+        <div class="row g-3">
+            <div class="col-md-12">
+                <div class="form-check form-switch card p-3 bg-light border">
+                    <input class="form-check-input" type="checkbox" name="enable_comments" id="enable_comments" value="1" <?= get_setting('enable_comments', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-bold fs-6" for="enable_comments">
+                        Enable Global Reader Comment Section Across All News Articles (ওয়েবসাইটের সকল সংবাদের কমেন্ট সেকশন চালু রাখুন)
+                    </label>
+                    <small class="text-muted d-block mt-1">
+                        <strong>অন থাকলে (ON):</strong> পাঠকেরা নিউজের নিচে কমেন্ট ফর্ম দেখতে পাবেন এবং কমেন্ট জমা দিতে পারবেন।<br>
+                        <strong>অফ থাকলে (OFF):</strong> পুরো ওয়েবসাইটে কমেন্ট সেকশন সম্পুর্ন বন্ধ ও হাইড হয়ে যাবে এবং নতুন কোনো কমেন্ট সাবমিট করা যাবে না।
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto Update & Sidebar Menu Control Card -->
+    <div class="card p-4 shadow-sm border mb-4 bg-white border-start border-4 border-warning">
+        <h5 class="fw-bold text-dark border-bottom pb-2 mb-3"><i class="bi bi-arrow-repeat text-warning me-2"></i> Auto Update & Admin Sidebar Control (অটো আপডেট সাইডবার কন্ট্রোল)</h5>
+        <div class="row g-3">
+            <div class="col-md-8">
+                <div class="form-check form-switch card p-3 bg-light border">
+                    <input class="form-check-input" type="checkbox" name="show_update_menu_sidebar" id="show_update_menu_sidebar" value="1" <?= get_setting('show_update_menu_sidebar', '1') === '1' ? 'checked' : '' ?>>
+                    <label class="form-check-label fw-bold fs-6" for="show_update_menu_sidebar">
+                        Show 'Auto Update (DB & Zip)' in Admin Sidebar Navigation (এডমিন সাইডবারে 'অটো আপডেট' মেনু প্রদর্শন করুন)
+                    </label>
+                    <small class="text-muted d-block mt-1">
+                        এটি চালু থাকলে এডমিন প্যানেলের বাম পাশের সাইডবারে "Auto Update" লিংকটি দেখাবে। বন্ধ করে দিলে সাইডবার থেকে লিংকটি হাইড হয়ে যাবে।
+                    </small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3 bg-light border">
+                    <label class="form-label fw-bold text-dark"><i class="bi bi-cpu me-1 text-danger"></i> System Version</label>
+                    <input type="text" name="system_version" class="form-control form-control-sm fw-bold text-danger" value="<?= htmlspecialchars(get_setting('system_version', 'v2.5.0')) ?>">
+                    <small class="text-muted mt-1">বর্তমান প্রজেক্ট ভার্সন। জিপ ফাইল আপডেটের সাথে সাথে স্বয়ংক্রিয় আপডেট হবে।</small>
                 </div>
             </div>
         </div>

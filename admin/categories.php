@@ -7,15 +7,17 @@ $msg = '';
 // Add / Edit Category Handler
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
-    $slug = slugify(trim($_POST['slug'] ?? $name));
+    $raw_slug = trim($_POST['slug'] ?? '');
+    $edit_id = (int)($_POST['edit_id'] ?? 0);
+    $slug = get_unique_slug('categories', !empty($raw_slug) ? $raw_slug : $name, $edit_id);
     $parent_id = (int)($_POST['parent_id'] ?? 0);
     $desc = trim($_POST['description'] ?? '');
     $order = (int)($_POST['cat_order'] ?? 0);
 
     if (!empty($name)) {
-        if (isset($_POST['edit_id']) && $_POST['edit_id'] > 0) {
+        if ($edit_id > 0) {
             $stmt = $db->prepare("UPDATE categories SET name=?, slug=?, parent_id=?, description=?, cat_order=? WHERE id=?");
-            $stmt->execute([$name, $slug, $parent_id, $desc, $order, (int)$_POST['edit_id']]);
+            $stmt->execute([$name, $slug, $parent_id, $desc, $order, $edit_id]);
             $msg = "Category updated successfully!";
         } else {
             $stmt = $db->prepare("INSERT INTO categories (name, slug, parent_id, description, cat_order, status) VALUES (?, ?, ?, ?, ?, 1)");
@@ -27,9 +29,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Delete Handler
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
-    $db->prepare("DELETE FROM categories WHERE id = ?")->execute([(int)$_GET['id']]);
-    header('Location: categories.php?msg=deleted');
-    exit;
+    $del_id = (int)$_GET['id'];
+    if ($del_id > 0) {
+        try {
+            // Reassign child categories & posts so no orphan records crash the site
+            $db->prepare("UPDATE categories SET parent_id = 0 WHERE parent_id = ?")->execute([$del_id]);
+            $db->prepare("UPDATE posts SET category_id = 0 WHERE category_id = ?")->execute([$del_id]);
+            $db->prepare("UPDATE posts SET subcategory_id = 0 WHERE subcategory_id = ?")->execute([$del_id]);
+            $db->prepare("DELETE FROM categories WHERE id = ?")->execute([$del_id]);
+            header('Location: categories.php?msg=deleted');
+            exit;
+        } catch (Throwable $e) {
+            $msg = "Error deleting category: " . $e->getMessage();
+        }
+    }
 }
 
 $search = trim($_GET['search'] ?? '');
@@ -66,6 +79,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['id'])) 
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Category Name *</label>
                     <input type="text" name="name" class="form-control" required value="<?= htmlspecialchars($edit_cat['name'] ?? '') ?>" placeholder="e.g. জাতীয়, খেলাধুলা">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Category Slug (URL)</label>
+                    <input type="text" name="slug" class="form-control" value="<?= htmlspecialchars($edit_cat['slug'] ?? '') ?>" placeholder="e.g. national, sports (leave blank for auto)">
+                    <div class="form-text small">Unique URL slug for this category.</div>
                 </div>
 
                 <div class="mb-3">

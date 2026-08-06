@@ -133,6 +133,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="nav-item">
                 <a href="settings.php" class="nav-link <?= $current_page === 'settings.php' ? 'active' : '' ?>"><i class="bi bi-gear"></i> Site Settings</a>
             </li>
+            <?php if (get_setting('show_update_menu_sidebar', '1') === '1'): ?>
+            <li class="nav-item">
+                <a href="update.php" class="nav-link <?= $current_page === 'update.php' ? 'active' : '' ?>"><i class="bi bi-arrow-repeat text-warning"></i> Auto Update (DB & Zip)</a>
+            </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a href="users.php" class="nav-link <?= $current_page === 'users.php' ? 'active' : '' ?>"><i class="bi bi-people"></i> Users & Roles</a>
             </li>

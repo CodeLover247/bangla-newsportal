@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/includes/functions.php';
 
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : '';
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -12,14 +12,29 @@ if (!empty($slug)) {
 }
 
 if (!$post) {
+    $page_title = 'সংবাদ পাওয়া যায়নি - Article Not Found';
+    require_once __DIR__ . '/includes/header.php';
     echo "<div class='container my-5 text-center py-5'>
-        <h2 class='text-danger'>Article Not Found</h2>
-        <p>The requested article could not be found or has been moved.</p>
-        <a href='index.php' class='btn btn-danger mt-3'>Return to Home</a>
+        <div class='card p-5 shadow-sm border-0 max-w-lg mx-auto'>
+            <i class='bi bi-exclamation-triangle text-danger display-3 mb-3'></i>
+            <h2 class='text-danger fw-bold mb-2'>সংবাদটি পাওয়া যায়নি (Article Not Found)</h2>
+            <p class='text-muted mb-4'>আপনি যে সংবাদটি খুঁজছেন তা মুছে ফেলা হয়েছে অথবা ভুল ইউআরএল প্রদান করা হয়েছে।</p>
+            <div><a href='index.php' class='btn btn-danger px-4 py-2 fw-bold'>হোম পেজে ফিরে যান</a></div>
+        </div>
     </div>";
     require_once __DIR__ . '/includes/footer.php';
     exit;
 }
+
+// Prepare Open Graph and Social Share Metadata
+$page_title = !empty($post['seo_title']) ? $post['seo_title'] : $post['title'];
+$page_desc = !empty($post['meta_description']) ? $post['meta_description'] : (!empty($post['short_description']) ? $post['short_description'] : strip_tags(mb_substr($post['content'] ?? '', 0, 180)));
+$page_keywords = !empty($post['meta_keywords']) ? $post['meta_keywords'] : ($post['tags'] ?? '');
+$page_image = !empty($post['featured_image']) ? $post['featured_image'] : '';
+$og_type = 'article';
+$og_url = get_full_url('article.php?slug=' . urlencode($post['slug']));
+
+require_once __DIR__ . '/includes/header.php';
 
 // Increment Views Counter
 increment_views($post['id']);
@@ -28,10 +43,17 @@ increment_views($post['id']);
 $related_posts = get_posts(['category_id' => $post['category_id'], 'limit' => 3]);
 
 // Comments
+$comments = [];
 $db = get_db_connection();
-$stmtComm = $db->prepare("SELECT * FROM comments WHERE post_id = ? AND status = 'approved' ORDER BY id DESC");
-$stmtComm->execute([$post['id']]);
-$comments = $stmtComm->fetchAll();
+if ($db) {
+    try {
+        $stmtComm = $db->prepare("SELECT * FROM comments WHERE post_id = ? AND status = 'approved' ORDER BY id DESC");
+        $stmtComm->execute([$post['id']]);
+        $comments = $stmtComm->fetchAll() ?: [];
+    } catch (Throwable $e) {
+        $comments = [];
+    }
+}
 ?>
 
 <div class="container my-4">
@@ -203,7 +225,10 @@ $comments = $stmtComm->fetchAll();
                 </div>
 
                 <!-- Comments Section -->
-                <?php if ($post['allow_comments']): ?>
+                <?php 
+                $global_comments_enabled = (get_setting('enable_comments', '1') === '1');
+                if ($global_comments_enabled && !empty($post['allow_comments'])): 
+                ?>
                 <div class="my-5 pt-4 border-top" id="comments">
                     <h4 class="fw-bold mb-4"><i class="bi bi-chat-left-text-fill text-danger me-2"></i> Reader Comments (<?= count($comments) ?>)</h4>
                     

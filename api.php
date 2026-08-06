@@ -27,6 +27,11 @@ if ($action === 'search') {
 }
 
 if ($action === 'add_comment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (get_setting('enable_comments', '1') !== '1') {
+        echo json_encode(['status' => 'error', 'message' => 'Comments are currently disabled globally by site administration.']);
+        exit;
+    }
+
     $post_id = (int)($_POST['post_id'] ?? 0);
     $name = sanitize($_POST['name'] ?? '');
     $email = filter_var($_POST['email'] ?? '', FILTER_VALIDATE_EMAIL);

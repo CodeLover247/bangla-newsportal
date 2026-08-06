@@ -113,35 +113,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $presetsData = [
             'classic_newspaper' => [
-                ['title' => 'জাতীয় সংবাদ', 'cat' => $catNational, 'limit' => 5, 'style' => 'lead_side_list'],
-                ['title' => 'বরিশাল বিভাগ', 'cat' => $catBarishal, 'limit' => 4, 'style' => 'two_column_grid'],
-                ['title' => 'রাজনীতি', 'cat' => $catPolitics, 'limit' => 4, 'style' => 'overlay_grid'],
-                ['title' => 'অর্থনীতি ও বাণিজ্য', 'cat' => $catBusiness, 'limit' => 3, 'style' => 'bento_grid'],
-                ['title' => 'খেলাধুলা', 'cat' => $catSports, 'limit' => 4, 'style' => 'horizontal_cards'],
-                ['title' => 'ভিডিও খবর ও প্রেস বুলেটিন', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater'],
-                ['title' => 'ছবি গ্যালারি', 'cat' => 0, 'limit' => 6, 'style' => 'photo_gallery_grid']
+                ['title' => 'লিডিং ইমেজ সেকশন (Leading Big Image Section)', 'cat' => $catNational, 'limit' => 5, 'style' => 'lead_side_list'],
+                ['title' => '২ কলাম নিউজ গ্রিড (2-Column Grid Section)', 'cat' => $catBarishal, 'limit' => 4, 'style' => 'two_column_grid'],
+                ['title' => 'ট্রেন্ডিং ওভারলে গ্রিড (Overlay Grid Section)', 'cat' => $catPolitics, 'limit' => 4, 'style' => 'overlay_grid'],
+                ['title' => '৩ কার্ড বেনটো গ্রিড (3-Card Bento Grid)', 'cat' => $catBusiness, 'limit' => 3, 'style' => 'bento_grid'],
+                ['title' => '৪ কলাম মিডিয়া সেকশন (4 Row Horizontal Cards)', 'cat' => $catSports, 'limit' => 4, 'style' => 'horizontal_cards'],
+                ['title' => 'ভিডিও খবর থিয়েটার (Video Gallery Theater)', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater'],
+                ['title' => 'ছবি গ্যালারি সঙ্কলন (Photo Gallery Grid)', 'cat' => 0, 'limit' => 6, 'style' => 'photo_gallery_grid']
             ],
             'modern_portal' => [
-                ['title' => 'প্রধান খবর', 'cat' => 0, 'limit' => 3, 'style' => 'bento_grid'],
-                ['title' => 'বরিশাল অঞ্চল', 'cat' => $catBarishal, 'limit' => 4, 'style' => 'overlay_grid'],
-                ['title' => 'রাজনীতি ও রাজ্যভার', 'cat' => $catPolitics, 'limit' => 4, 'style' => 'two_column_grid'],
-                ['title' => 'সর্বশেষ স্পটলাইট', 'cat' => 0, 'limit' => 6, 'style' => 'carousel_slider'],
-                ['title' => 'তথ্যপ্রযুক্তি ও আধুনিক গ্যাজেট', 'cat' => $catTech, 'limit' => 4, 'style' => 'horizontal_cards'],
-                ['title' => 'ভিডিও থিয়েটার', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater']
+                ['title' => 'প্রধান লিডিং নিউজলিস্ট (Lead Highlight Section)', 'cat' => 0, 'limit' => 3, 'style' => 'bento_grid'],
+                ['title' => 'আঞ্চলিক স্পটলাইট গ্রিড (Regional Spotlight Grid)', 'cat' => $catBarishal, 'limit' => 4, 'style' => 'overlay_grid'],
+                ['title' => '২ কলাম ফিচার্ড সেকশন (2 Column Featured Row)', 'cat' => $catPolitics, 'limit' => 4, 'style' => 'two_column_grid'],
+                ['title' => 'ক্যারোজেল স্লাইডার (Carousel Slider Section)', 'cat' => 0, 'limit' => 6, 'style' => 'carousel_slider'],
+                ['title' => '৪ কলাম সংবাদ কার্ড (4 Column Media Grid)', 'cat' => $catTech, 'limit' => 4, 'style' => 'horizontal_cards'],
+                ['title' => 'ভিডিও গ্যালারি প্লেয়ার (Video Gallery Player)', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater']
             ],
             'magazine_spotlight' => [
-                ['title' => 'স্পটলাইট হেডলাইনস', 'cat' => 0, 'limit' => 6, 'style' => 'carousel_slider'],
-                ['title' => 'বিশেষ সংবাদ ও সাক্ষাৎকার', 'cat' => $catNational, 'limit' => 5, 'style' => 'lead_side_list'],
-                ['title' => 'ফটো অ্যালবাম গ্যালারি', 'cat' => 0, 'limit' => 6, 'style' => 'photo_gallery_grid'],
-                ['title' => 'বিনোদন ও তারকার খবর', 'cat' => $catEnt, 'limit' => 4, 'style' => 'horizontal_cards'],
-                ['title' => 'ভিডিও বুলেটিন', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater']
+                ['title' => 'স্পটলাইট ক্যারোজেল (Spotlight Slider Header)', 'cat' => 0, 'limit' => 6, 'style' => 'carousel_slider'],
+                ['title' => 'লিডিং বিগ ইমেজ সেকশন (Leading Big Image Section)', 'cat' => $catNational, 'limit' => 5, 'style' => 'lead_side_list'],
+                ['title' => 'ছবি গ্যালারি অ্যালবامات (Photo Gallery Showcase)', 'cat' => 0, 'limit' => 6, 'style' => 'photo_gallery_grid'],
+                ['title' => '৪ কলাম সংবাদ কার্ড (4 Column Media Grid)', 'cat' => $catEnt, 'limit' => 4, 'style' => 'horizontal_cards'],
+                ['title' => 'ভিডিও বুলেটিন থিয়েটার (Video Bulletin Theater)', 'cat' => 0, 'limit' => 4, 'style' => 'video_gallery_theater']
             ],
             'compact_fast_news' => [
-                ['title' => 'দ্রুত বুলেটিন খবর', 'cat' => 0, 'limit' => 8, 'style' => 'compact_list'],
-                ['title' => 'জাতীয় খবর', 'cat' => $catNational, 'limit' => 4, 'style' => 'two_column_grid'],
-                ['title' => 'বরিশাল হাইলাইটস', 'cat' => $catBarishal, 'limit' => 6, 'style' => 'compact_list'],
-                ['title' => 'অর্থনীতি আপডেট', 'cat' => $catBusiness, 'limit' => 4, 'style' => 'overlay_grid'],
-                ['title' => 'খেলাধুলার আপডেট', 'cat' => $catSports, 'limit' => 6, 'style' => 'compact_list']
+                ['title' => 'দ্রুত বুলেটিন সংবাদ (Fast News Feed)', 'cat' => 0, 'limit' => 8, 'style' => 'compact_list'],
+                ['title' => '২ কলাম প্রধান সংবাদ (2 Column Main Grid)', 'cat' => $catNational, 'limit' => 4, 'style' => 'two_column_grid'],
+                ['title' => 'সংক্ষিপ্ত সংবাদ তালিকা (Compact List Feed)', 'cat' => $catBarishal, 'limit' => 6, 'style' => 'compact_list'],
+                ['title' => 'ওভারলে কার্ড গ্রিড (Overlay Card Grid)', 'cat' => $catBusiness, 'limit' => 4, 'style' => 'overlay_grid'],
+                ['title' => '৪ কলাম কার্ড গ্রিড (4 Row Media Grid)', 'cat' => $catSports, 'limit' => 6, 'style' => 'horizontal_cards']
             ]
         ];
 
@@ -576,14 +576,13 @@ $layout_styles = [
                         <label class="form-label fw-bold text-dark"><i class="bi bi-magic text-danger me-1"></i> Quick Select Prebuilt Section Template:</label>
                         <select id="quickPrebuiltSelector" class="form-select border-danger">
                             <option value="">-- কাস্টম সেকশন তৈরি করুন (অথবা তালিকা থেকে বেছে নিন) --</option>
-                            <option value='{"title":"জাতীয় সংবাদ", "cat":0, "limit":5, "style":"lead_side_list"}'>📰 জাতীয় সংবাদ (1 Lead + Side List)</option>
-                            <option value='{"title":"রাজনীতি", "cat":0, "limit":4, "style":"two_column_grid"}'>📰 রাজনীতি (2-Column Grid)</option>
-                            <option value='{"title":"বরিশাল বিভাগ", "cat":0, "limit":4, "style":"overlay_grid"}'>📰 বরিশাল বিভাগ (Overlay Grid)</option>
-                            <option value='{"title":"অর্থনীতি ও বাণিজ্য", "cat":0, "limit":3, "style":"bento_grid"}'>📰 অর্থনীতি ও বাণিজ্য (3-Card Bento Grid)</option>
-                            <option value='{"title":"খেলাধুলা", "cat":0, "limit":4, "style":"horizontal_cards"}'>📰 খেলাধুলা (4-Card Horizontal)</option>
-                            <option value='{"title":"ভিডিও খবর ও প্রেস বুলেটিন", "cat":0, "limit":4, "style":"video_gallery_theater"}'>🎬 ভিডিও খবর থিয়েটার (YouTube Player + Playlist)</option>
-                            <option value='{"title":"ছবি গ্যালারি", "cat":0, "limit":6, "style":"photo_gallery_grid"}'>📷 ফটো গ্যালারি অ্যালবাম (Lightbox Zoom)</option>
-                            <option value='{"title":"আন্তর্জাতিক খবর", "cat":0, "limit":4, "style":"two_column_grid"}'>📰 আন্তর্জাতিক খবর (2-Column Grid)</option>
+                            <option value='{"title":"লিডিং বিগ ইমেজ সেকশন", "cat":0, "limit":5, "style":"lead_side_list"}'>📰 লিডিং বিগ ইমেজ সেকশন (1 Lead + Side List)</option>
+                            <option value='{"title":"২ কলাম নিউজ গ্রিড", "cat":0, "limit":4, "style":"two_column_grid"}'>📰 ২ কলাম নিউজ গ্রিড (2-Column Grid)</option>
+                            <option value='{"title":"৪ কলাম মিডিয়া সেকশন", "cat":0, "limit":4, "style":"horizontal_cards"}'>📰 ৪ কলাম মিডিয়া সেকশন (4 Row Horizontal Cards)</option>
+                            <option value='{"title":"৩ কার্ড বেনটো গ্রিড", "cat":0, "limit":3, "style":"bento_grid"}'>📰 ৩ কার্ড বেনটো গ্রিড (3-Card Bento Grid)</option>
+                            <option value='{"title":"ট্রেন্ডিং ওভারলে গ্রিড", "cat":0, "limit":4, "style":"overlay_grid"}'>📰 ট্রেন্ডিং ওভারলে গ্রিড (Overlay Card Grid)</option>
+                            <option value='{"title":"ভিডিও খবর থিয়েটার", "cat":0, "limit":4, "style":"video_gallery_theater"}'>🎬 ভিডিও খবর থিয়েটার (Video Gallery Player)</option>
+                            <option value='{"title":"ফটো গ্যালারি সঙ্কলন", "cat":0, "limit":6, "style":"photo_gallery_grid"}'>📷 ফটো গ্যালারি সঙ্কলন (Photo Albums Grid)</option>
                         </select>
                     </div>
 

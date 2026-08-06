@@ -1,4 +1,10 @@
 <?php
+require_once __DIR__ . '/includes/functions.php';
+
+$page_title = 'ভিডিও গ্যালারি - Video Gallery | ' . get_setting('site_name', 'Babuganjlive.com');
+$page_desc = 'সবশেষ ভিডিও নিউজ, সাক্ষাৎকার ও বিশেষ ভিডিও প্রতিবেদনসমূহ দেখুন।';
+$og_url = get_full_url('video.php');
+
 require_once __DIR__ . '/includes/header.php';
 
 $db = get_db_connection();
@@ -8,11 +14,23 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $limit = 9; // 9 videos per page
 $offset = ($page - 1) * $limit;
 
-$total_videos = (int)$db->query("SELECT COUNT(*) FROM videos")->fetchColumn();
-$total_pages = max(1, ceil($total_videos / $limit));
+$total_videos = 0;
+$total_pages = 1;
+$videos = [];
 
-$stmt = $db->query("SELECT * FROM videos ORDER BY id DESC LIMIT {$limit} OFFSET {$offset}");
-$videos = $stmt->fetchAll() ?: [];
+if ($db) {
+    try {
+        $total_videos = (int)$db->query("SELECT COUNT(*) FROM videos")->fetchColumn();
+        $total_pages = max(1, ceil($total_videos / $limit));
+
+        $stmt = $db->query("SELECT * FROM videos ORDER BY id DESC LIMIT {$limit} OFFSET {$offset}");
+        $videos = $stmt->fetchAll() ?: [];
+    } catch (Throwable $e) {
+        $videos = [];
+        $total_videos = 0;
+        $total_pages = 1;
+    }
+}
 ?>
 
 <div class="container my-4">
@@ -38,17 +56,25 @@ $videos = $stmt->fetchAll() ?: [];
             </div>
         <?php else: ?>
             <?php foreach ($videos as $v): 
-                $embedUrl = format_video_embed_url($v['video_url']);
+                $v_info = format_video_embed_url($v['video_url'] ?? '');
+                $embedUrl = is_array($v_info) ? ($v_info['embedUrl'] ?? '') : (string)$v_info;
+                if (empty($embedUrl) && !empty($v['video_url'])) {
+                    $embedUrl = get_youtube_embed_url($v['video_url']);
+                }
             ?>
-                <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card h-100 shadow-sm border rounded-3 overflow-hidden">
                         <div class="ratio ratio-16x9 bg-black">
-                            <iframe src="<?= htmlspecialchars($embedUrl) ?>" title="<?= htmlspecialchars($v['title']) ?>" allowfullscreen loading="lazy"></iframe>
+                            <?php if (!empty($v_info['isDirectMp4'])): ?>
+                                <video src="<?= htmlspecialchars($embedUrl) ?>" controls class="w-100 h-100"></video>
+                            <?php else: ?>
+                                <iframe src="<?= htmlspecialchars($embedUrl) ?>" title="<?= htmlspecialchars($v['title']) ?>" allowfullscreen loading="lazy"></iframe>
+                            <?php endif; ?>
                         </div>
                         <div class="card-body p-3">
                             <h5 class="card-title font-serif fw-bold text-dark mb-2"><?= htmlspecialchars($v['title']) ?></h5>
                             <?php if (!empty($v['description'])): ?>
-                                <p class="card-text text-muted small line-clamp-2"><?= htmlspecialchars($v['description']) ?></p>
+                                <p class="card-text text-muted small mb-0 line-clamp-2"><?= htmlspecialchars($v['description']) ?></p>
                             <?php endif; ?>
                             <?php if (!empty($v['created_at'])): ?>
                                 <small class="text-muted d-block mt-2"><i class="bi bi-clock me-1 text-danger"></i> <?= date('M d, Y', strtotime($v['created_at'])) ?></small>

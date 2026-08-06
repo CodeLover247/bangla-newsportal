@@ -11,7 +11,7 @@ $show_videos = get_setting('home_show_videos', '1');
 $show_photos = get_setting('home_show_photos', '1');
 
 // Fetch Hero Section Lead Stories
-$hero_opts = ['limit' => $hero_limit];
+$hero_opts = ['limit' => $hero_limit, 'order_by' => 'p.publish_date DESC, p.id DESC'];
 if ($hero_cat_id > 0) {
     $hero_opts['category_id'] = $hero_cat_id;
 } else {
@@ -19,13 +19,13 @@ if ($hero_cat_id > 0) {
 }
 $featured_posts = get_posts($hero_opts);
 if (empty($featured_posts)) {
-    $featured_posts = get_posts(['limit' => $hero_limit]);
+    $featured_posts = get_posts(['limit' => $hero_limit, 'order_by' => 'p.publish_date DESC, p.id DESC']);
 }
 $lead_post = isset($featured_posts[0]) ? $featured_posts[0] : null;
 $side_featured = array_slice($featured_posts, 1, 4);
 
 // Fetch Latest and Popular Posts for Hero Sidebar Tabs
-$latest_hero_posts = get_posts(['limit' => 6]);
+$latest_hero_posts = get_posts(['limit' => 6, 'order_by' => 'p.publish_date DESC, p.id DESC']);
 $popular_hero_posts = get_posts(['order_by' => 'p.views DESC', 'limit' => 6]);
 
 // Fetch All Dynamic Homepage Sections
@@ -44,8 +44,8 @@ foreach ($active_sections as $sec) {
 }
 
 // Fetch Multimedia Content
-$videos = ($show_videos === '1') ? $db->query("SELECT * FROM videos ORDER BY id DESC LIMIT 2")->fetchAll() : [];
-$photos = ($show_photos === '1') ? $db->query("SELECT * FROM gallery_photos ORDER BY id DESC LIMIT 4")->fetchAll() : [];
+$videos = ($show_videos === '1') ? get_videos(2) : [];
+$photos = ($show_photos === '1') ? get_homepage_photos(4) : [];
 
 $fallback_img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80';
 ?>
@@ -451,7 +451,7 @@ $fallback_img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=
                 }
 
                 // Standard News Category Fetching
-                $fetch_opts = ['limit' => $limit];
+                $fetch_opts = ['limit' => $limit, 'order_by' => 'p.publish_date DESC, p.id DESC'];
                 if ($cat_id > 0) {
                     $fetch_opts['category_id'] = $cat_id;
                 }

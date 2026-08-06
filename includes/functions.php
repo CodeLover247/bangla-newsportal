@@ -144,6 +144,30 @@ function sanitize($data) {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
+// Site URL Helpers for Social Sharing and OG Tags
+function get_site_url() {
+    $url = get_setting('site_url', '');
+    if (!empty($url)) {
+        return rtrim($url, '/');
+    }
+    if (defined('SITE_URL') && !empty(SITE_URL)) {
+        return rtrim(SITE_URL, '/');
+    }
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443 ? "https" : "http";
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    return $protocol . "://" . $host;
+}
+
+function get_full_url($path = '') {
+    if (empty($path)) {
+        return get_site_url();
+    }
+    if (preg_match('~^https?://~i', $path) || strpos($path, '//') === 0 || strpos($path, 'data:') === 0) {
+        return $path;
+    }
+    return get_site_url() . '/' . ltrim($path, '/');
+}
+
 // Convert image/media URL to root-relative URL if it's a local upload
 function get_media_url($url, $fallback = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&auto=format&fit=crop&q=80') {
     if (empty($url)) return $fallback;
@@ -156,18 +180,53 @@ function get_media_url($url, $fallback = 'https://images.unsplash.com/photo-1504
 
 // Generate URL slug
 function slugify($text) {
-    if (function_exists('iconv')) {
-        $trans = @iconv('utf-8', 'us-ascii//TRANSLIT', $text);
-        if ($trans !== false) {
-            $text = $trans;
+    if (empty($text)) return 'slug-' . time();
+    $text = trim($text);
+    // Convert spaces and slashes to hyphens
+    $text = preg_replace('/[\s\/_]+/', '-', $text);
+    // Remove unwanted special punctuation but preserve unicode/letters/numbers
+    $text = preg_replace('/[^\p{L}\p{N}\-]+/u', '', $text);
+    // Trim leading/trailing hyphens
+    $text = trim($text, '-');
+    // Compress multiple hyphens
+    $text = preg_replace('/-+/', '-', $text);
+    $text = mb_strtolower($text, 'UTF-8');
+    return !empty($text) ? $text : 'slug-' . time();
+}
+
+// Generate unique slug for a given database table (categories, posts, pages)
+function get_unique_slug($table, $slug_input, $current_id = 0) {
+    $db = get_db_connection();
+    $clean_slug = slugify($slug_input);
+    if (!$db) return $clean_slug;
+
+    $allowed_tables = ['categories', 'posts', 'pages'];
+    if (!in_array($table, $allowed_tables)) {
+        return $clean_slug;
+    }
+
+    $original_slug = $clean_slug;
+    $i = 1;
+
+    while (true) {
+        try {
+            if ($current_id > 0) {
+                $stmt = $db->prepare("SELECT COUNT(*) FROM {$table} WHERE slug = ? AND id != ?");
+                $stmt->execute([$clean_slug, $current_id]);
+            } else {
+                $stmt = $db->prepare("SELECT COUNT(*) FROM {$table} WHERE slug = ?");
+                $stmt->execute([$clean_slug]);
+            }
+            $count = (int)$stmt->fetchColumn();
+            if ($count === 0) {
+                return $clean_slug;
+            }
+            $clean_slug = $original_slug . '-' . $i;
+            $i++;
+        } catch (Throwable $e) {
+            return $clean_slug;
         }
     }
-    $text = preg_replace('~[^\pL\d]+~u', '-', $text);
-    $text = preg_replace('~[^-\w]+~', '', $text);
-    $text = trim($text, '-');
-    $text = preg_replace('~-+~', '-', $text);
-    $text = strtolower($text);
-    return empty($text) ? 'news-' . time() : $text;
 }
 
 // Get categories
@@ -191,13 +250,18 @@ function get_categories($parent_id = 0, $only_active = true) {
 // Get single category by ID or Slug
 function get_category($id_or_slug) {
     $db = get_db_connection();
-    if (is_numeric($id_or_slug)) {
-        $stmt = $db->prepare("SELECT * FROM categories WHERE id = ?");
-    } else {
-        $stmt = $db->prepare("SELECT * FROM categories WHERE slug = ?");
+    if (!$db) return false;
+    try {
+        if (is_numeric($id_or_slug)) {
+            $stmt = $db->prepare("SELECT * FROM categories WHERE id = ?");
+        } else {
+            $stmt = $db->prepare("SELECT * FROM categories WHERE slug = ?");
+        }
+        $stmt->execute([$id_or_slug]);
+        return $stmt->fetch() ?: false;
+    } catch (Throwable $e) {
+        return false;
     }
-    $stmt->execute([$id_or_slug]);
-    return $stmt->fetch();
 }
 
 function format_post_for_lang($post, $lang = null) {
@@ -232,6 +296,7 @@ function format_post_for_lang($post, $lang = null) {
 // Fetch posts with flexible options
 function get_posts($options = []) {
     $db = get_db_connection();
+    if (!$db) return [];
     $limit = isset($options['limit']) ? (int)$options['limit'] : 10;
     $offset = isset($options['offset']) ? (int)$options['offset'] : 0;
     $category_id = isset($options['category_id']) ? (int)$options['category_id'] : 0;
@@ -355,8 +420,14 @@ function get_posts($options = []) {
 // Get total post count
 function get_posts_count($options = []) {
     $db = get_db_connection();
+    if (!$db) return 0;
     $category_id = isset($options['category_id']) ? (int)$options['category_id'] : 0;
+    $subcategory_id = isset($options['subcategory_id']) ? (int)$options['subcategory_id'] : 0;
     $author_id = isset($options['author_id']) ? (int)$options['author_id'] : 0;
+    $is_featured = isset($options['is_featured']) ? (int)$options['is_featured'] : null;
+    $is_breaking = isset($options['is_breaking']) ? (int)$options['is_breaking'] : null;
+    $is_trending = isset($options['is_trending']) ? (int)$options['is_trending'] : null;
+    $is_popular = isset($options['is_popular']) ? (int)$options['is_popular'] : null;
     $flag = isset($options['flag']) ? $options['flag'] : '';
     $search = isset($options['search']) ? trim($options['search']) : '';
     $status = isset($options['status']) ? $options['status'] : 'published';
@@ -365,8 +436,14 @@ function get_posts_count($options = []) {
     $params = [$status];
 
     if ($category_id > 0) {
-        $where[] = "p.category_id = ?";
+        $where[] = "(p.category_id = ? OR c.parent_id = ?)";
         $params[] = $category_id;
+        $params[] = $category_id;
+    }
+
+    if ($subcategory_id > 0) {
+        $where[] = "p.subcategory_id = ?";
+        $params[] = $subcategory_id;
     }
 
     if ($author_id > 0) {
@@ -384,6 +461,31 @@ function get_posts_count($options = []) {
         $where[] = "p.is_popular = 1";
     }
 
+    if ($is_featured !== null && $flag !== 'featured') {
+        $where[] = "p.is_featured = ?";
+        $params[] = $is_featured;
+    }
+
+    if ($is_breaking !== null && $flag !== 'breaking') {
+        $where[] = "p.is_breaking = ?";
+        $params[] = $is_breaking;
+    }
+
+    if ($is_trending !== null && $flag !== 'trending') {
+        $where[] = "p.is_trending = ?";
+        $params[] = $is_trending;
+    }
+
+    if ($is_popular !== null && $flag !== 'popular') {
+        $where[] = "p.is_popular = ?";
+        $params[] = $is_popular;
+    }
+
+    if (!empty($options['date'])) {
+        $where[] = "DATE(p.publish_date) = ?";
+        $params[] = trim($options['date']);
+    }
+
     if (!empty($options['date_from'])) {
         $where[] = "DATE(p.publish_date) >= ?";
         $params[] = trim($options['date_from']);
@@ -395,7 +497,7 @@ function get_posts_count($options = []) {
     }
 
     if (!empty($search)) {
-        $where[] = "(p.title LIKE ? OR p.title_en LIKE ? OR p.short_description LIKE ? OR p.content LIKE ? OR p.reporter_name LIKE ?)";
+        $where[] = "(p.title LIKE ? OR p.short_description LIKE ? OR p.content LIKE ? OR p.tags LIKE ? OR p.reporter_name LIKE ?)";
         $searchTerm = "%{$search}%";
         $params[] = $searchTerm;
         $params[] = $searchTerm;
@@ -405,7 +507,7 @@ function get_posts_count($options = []) {
     }
 
     $whereClause = implode(" AND ", $where);
-    $sql = "SELECT COUNT(*) as total FROM posts p WHERE {$whereClause}";
+    $sql = "SELECT COUNT(*) as total FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE {$whereClause}";
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
     $row = $stmt->fetch();
@@ -415,36 +517,49 @@ function get_posts_count($options = []) {
 // Get post by slug
 function get_post_by_slug($slug) {
     $db = get_db_connection();
-    $sql = "SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar, u.bio as author_bio
-            FROM posts p
-            LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN users u ON p.author_id = u.id
-            WHERE p.slug = ? AND p.status = 'published'";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([$slug]);
-    $post = $stmt->fetch();
-    return format_post_for_lang($post);
+    if (!$db) return false;
+    try {
+        $sql = "SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar, u.bio as author_bio
+                FROM posts p
+                LEFT JOIN categories c ON p.category_id = c.id
+                LEFT JOIN users u ON p.author_id = u.id
+                WHERE p.slug = ? AND p.status = 'published'";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([$slug]);
+        $post = $stmt->fetch();
+        return format_post_for_lang($post);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 // Get post by ID
 function get_post_by_id($id) {
     $db = get_db_connection();
-    $sql = "SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar, u.bio as author_bio
-            FROM posts p
-            LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN users u ON p.author_id = u.id
-            WHERE p.id = ? AND p.status = 'published'";
-    $stmt = $db->prepare($sql);
-    $stmt->execute([(int)$id]);
-    $post = $stmt->fetch();
-    return format_post_for_lang($post);
+    if (!$db) return false;
+    try {
+        $sql = "SELECT p.*, c.name as category_name, c.slug as category_slug, u.full_name as author_name, u.avatar as author_avatar, u.bio as author_bio
+                FROM posts p
+                LEFT JOIN categories c ON p.category_id = c.id
+                LEFT JOIN users u ON p.author_id = u.id
+                WHERE p.id = ? AND p.status = 'published'";
+        $stmt = $db->prepare($sql);
+        $stmt->execute([(int)$id]);
+        $post = $stmt->fetch();
+        return format_post_for_lang($post);
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 // Increment post view counter
 function increment_views($post_id) {
     $db = get_db_connection();
-    $stmt = $db->prepare("UPDATE posts SET views = views + 1 WHERE id = ?");
-    $stmt->execute([$post_id]);
+    if (!$db) return;
+    try {
+        $stmt = $db->prepare("UPDATE posts SET views = views + 1 WHERE id = ?");
+        $stmt->execute([$post_id]);
+    } catch (Throwable $e) {}
 }
 
 // Get breaking news ticker
@@ -458,9 +573,14 @@ function get_breaking_news($limit = null) {
 // Get advertisement by position
 function get_ad($position) {
     $db = get_db_connection();
-    $stmt = $db->prepare("SELECT * FROM ads WHERE position = ? AND status = 1 LIMIT 1");
-    $stmt->execute([$position]);
-    return $stmt->fetch();
+    if (!$db) return false;
+    try {
+        $stmt = $db->prepare("SELECT * FROM ads WHERE position = ? AND status = 1 LIMIT 1");
+        $stmt->execute([$position]);
+        return $stmt->fetch();
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 // Render advertisement banner
@@ -986,11 +1106,12 @@ function get_youtube_thumbnail($url, $custom_thumb = '') {
 
 function get_videos($limit = 6) {
     $db = get_db_connection();
+    if (!$db) return [];
     try {
         $stmt = $db->prepare("SELECT * FROM videos ORDER BY id DESC LIMIT ?");
         $stmt->bindValue(1, (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
-        $vids = $stmt->fetchAll();
+        $vids = $stmt->fetchAll() ?: [];
         foreach ($vids as &$v) {
             $v['embed_url'] = get_youtube_embed_url($v['video_url']);
             $v['thumb_url'] = get_youtube_thumbnail($v['video_url'], $v['thumbnail'] ?? '');
@@ -1003,16 +1124,17 @@ function get_videos($limit = 6) {
 
 function get_gallery_albums_with_photos($limit = 6) {
     $db = get_db_connection();
+    if (!$db) return [];
     try {
         $stmt = $db->prepare("SELECT * FROM gallery_albums ORDER BY id DESC LIMIT ?");
         $stmt->bindValue(1, (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
-        $albums = $stmt->fetchAll();
+        $albums = $stmt->fetchAll() ?: [];
 
         foreach ($albums as &$alb) {
             $pStmt = $db->prepare("SELECT * FROM gallery_photos WHERE album_id = ? ORDER BY id ASC");
             $pStmt->execute([$alb['id']]);
-            $alb['photos'] = $pStmt->fetchAll();
+            $alb['photos'] = $pStmt->fetchAll() ?: [];
             $alb['photo_count'] = count($alb['photos']);
         }
         return $albums;
@@ -1023,11 +1145,12 @@ function get_gallery_albums_with_photos($limit = 6) {
 
 function get_homepage_photos($limit = 8) {
     $db = get_db_connection();
+    if (!$db) return [];
     try {
         $stmt = $db->prepare("SELECT p.*, a.title as album_title, a.slug as album_slug FROM gallery_photos p LEFT JOIN gallery_albums a ON p.album_id = a.id ORDER BY p.id DESC LIMIT ?");
         $stmt->bindValue(1, (int)$limit, PDO::PARAM_INT);
         $stmt->execute();
-        return $stmt->fetchAll();
+        return $stmt->fetchAll() ?: [];
     } catch (Exception $e) {
         return [];
     }
